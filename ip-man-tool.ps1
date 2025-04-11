@@ -116,15 +116,14 @@ if ($IPAddress -and $PrefixLength) {
     Write-Warning "Cannot calculate subnet details. Ensure IPAddress and PrefixLength are provided."
 }
 
-# Generate output object
-# Generate output object with all expected properties
+# Initialize the output object with all expected properties
 $Result = [PSCustomObject]@{
-    IPAddress       = $IPAddress.IPAddressToString
-    Mask            = $Mask.IPAddressToString
-    PrefixLength    = $PrefixLength
-    NetworkAddress  = $null
+    IPAddress        = $IPAddress.IPAddressToString
+    Mask             = $Mask.IPAddressToString
+    PrefixLength     = $PrefixLength
+    NetworkAddress   = $null
     BroadcastAddress = $null
-    UsableHosts     = $null
+    UsableHosts      = $null
 }
 
 # Populate the subnet details
