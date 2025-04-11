@@ -7,9 +7,6 @@ ip-man-tool -CIDR 192.168.0.0/24
 
 # Calculate subnet details from an IP and Mask
 ip-man-tool -IPAddress 192.168.0.0 -Mask 255.255.255.0
-
-# Add an IP offset
-(ip-man-tool -IPAddress 192.168.99.56/28).Add(1).IPAddress
 #>
 
 [CmdletBinding(DefaultParameterSetName = 'CIDR')]
