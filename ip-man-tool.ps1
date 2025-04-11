@@ -1,4 +1,4 @@
-<#
+<# 
 .DESCRIPTION
 IP management tool
 .EXAMPLES
@@ -43,24 +43,32 @@ param (
 
 # Convert CIDR input if provided
 if ($CIDR) {
+    Write-Verbose "Processing CIDR input: $CIDR"
     $IPAddress, $PrefixLength = $CIDR -split '[|\/]'
     $IPAddress = [IPAddress]$IPAddress
     $PrefixLength = [int]$PrefixLength
+    Write-Debug "Extracted IPAddress: $IPAddress, PrefixLength: $PrefixLength"
 }
 
 # Calculate Mask if PrefixLength is provided without Mask
 if ($PrefixLength -and -not $Mask) {
+    Write-Verbose "Calculating Mask from PrefixLength: $PrefixLength"
     $Mask = [IPAddress]([string](4gb - [math]::Pow(2, 32 - $PrefixLength)))
+    Write-Debug "Calculated Mask: $Mask"
 }
 
 # Calculate Mask if WildCard is provided
 if ($WildCard) {
+    Write-Verbose "Calculating Mask from WildCard: $WildCard"
     $Mask = [IPAddress](([byte[]]$WildCard.GetAddressBytes() | ForEach-Object { 255 - $_ }) -join '.')
+    Write-Debug "Calculated Mask from WildCard: $Mask"
 }
 
 # Calculate PrefixLength if Mask is provided without PrefixLength
 if (-not $PrefixLength -and $Mask) {
+    Write-Verbose "Calculating PrefixLength from Mask: $Mask"
     $PrefixLength = 32 - ($Mask.GetAddressBytes() | ForEach-Object { [math]::Log(256 - $_, 2) }).Sum
+    Write-Debug "Calculated PrefixLength: $PrefixLength"
 }
 
 # Input Validation for Mask
@@ -71,15 +79,23 @@ if (($Mask.GetAddressBytes() -join '') -match '0+1') {
 
 # Calculate Subnet details
 if ($IPAddress -and $Mask) {
+    Write-Verbose "Calculating Subnet and Broadcast for IPAddress: $IPAddress and Mask: $Mask"
     $Subnet = $IPAddress.Address -band $Mask.Address
+    Write-Debug "Calculated Subnet: $Subnet"
     $Broadcast = [IPAddress](([byte[]]([IPAddress]$Subnet).GetAddressBytes() | ForEach-Object { $_ }) + ([byte[]]$WildCard.GetAddressBytes() | ForEach-Object { $_ }))
+    Write-Debug "Calculated Broadcast: $Broadcast"
 } else {
     Write-Error "Error: IPAddress or Mask is null. Cannot calculate Subnet or Broadcast."
     return
-}$IPcount = [math]::Pow(2, 32 - $PrefixLength)
+}
+
+$IPcount = [math]::Pow(2, 32 - $PrefixLength)
+Write-Debug "Calculated number of IP addresses in Subnet: $IPcount"
+
 # Generate output object
 $Result = [PSCustomObject]@{
     IPAddress  = $IPAddress.IPAddressToString
     Mask       = $Mask.IPAddressToString
     PrefixLength = $PrefixLength
 }
+Write-Verbose "Output Result: $Result"
