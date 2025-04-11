@@ -83,39 +83,6 @@ function ConvertToBigEndian {
     return [array]::Reverse($bytes); # Reverses the array for big-endian order
 }
 
-# Calculate Subnet details
-if ($IPAddress -and $PrefixLength) {
-    Write-Verbose "Calculating subnet details for IPAddress: $IPAddress and PrefixLength: $PrefixLength"
-
-    # Calculate the network address
-    $networkAddressBytes = $IPAddress.GetAddressBytes()
-    $maskBytes = $Mask.GetAddressBytes()
-    # Perform bitwise AND operation element-wise
-    $networkAddressBytes = for ($i = 0; $i -lt $networkAddressBytes.Length; $i++) {
-        $networkAddressBytes[$i] -band $maskBytes[$i]
-    }
-    $NetworkAddress = [IPAddress]([System.Net.IPAddress]::new($networkAddressBytes))
-
-    # Calculate the broadcast address
-    $wildcardBytes = $maskBytes | ForEach-Object { 255 - $_ }
-    # Perform bitwise OR operation element-wise
-    $broadcastAddressBytes = for ($i = 0; $i -lt $networkAddressBytes.Length; $i++) {
-        $networkAddressBytes[$i] -bor $wildcardBytes[$i]
-    }
-    $BroadcastAddress = [IPAddress]([System.Net.IPAddress]::new($broadcastAddressBytes))
-
-    # Calculate the total number of usable hosts
-    $usableHosts = [math]::Pow(2, 32 - $PrefixLength) - 2
-
-    # Update the result object
-    $Result.NetworkAddress = $NetworkAddress.IPAddressToString
-    $Result.BroadcastAddress = $BroadcastAddress.IPAddressToString
-    $Result.UsableHosts = $usableHosts
-    Write-Debug "Calculated NetworkAddress: $NetworkAddress, BroadcastAddress: $BroadcastAddress, UsableHosts: $usableHosts"
-} else {
-    Write-Warning "Cannot calculate subnet details. Ensure IPAddress and PrefixLength are provided."
-}
-
 # Initialize the output object with all expected properties
 $Result = [PSCustomObject]@{
     IPAddress        = $IPAddress.IPAddressToString
