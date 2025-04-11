@@ -83,35 +83,7 @@ function ConvertToBigEndian {
     return [array]::Reverse($bytes); # Reverses the array for big-endian order
 }
 
-# Calculate Subnet details - Fixed
-if ($IPAddress -and $Mask) {
-    Write-Verbose "Calculating Subnet and Broadcast using fixed method for IPAddress: $IPAddress and Mask: $Mask"
-    
-    # Convert IP and Mask to BigInteger for precise bitwise operations
-    $ipBytes = [System.Net.IPAddress]::Parse($IPAddress.IPAddressToString).GetAddressBytes()
-    $maskBytes = [System.Net.IPAddress]::Parse($Mask.IPAddressToString).GetAddressBytes()
-    $ipBigInt = [System.Numerics.BigInteger]::new([array]::Reverse($ipBytes))
-    $maskBigInt = [System.Numerics.BigInteger]::new([array]::Reverse($maskBytes))
-
-    # Calculate Subnet
-    $subnetBigInt = $ipBigInt -band $maskBigInt
-    $subnetBytes = [array]::Reverse($subnetBigInt.ToByteArray())
-    $Subnet = [System.Net.IPAddress]::new($subnetBytes[0..3]) # Take the first 4 bytes for IPv4
-    Write-Debug "Calculated Subnet: $Subnet"
-
-    # Calculate Broadcast
-    $wildcardBigInt = -bnot $maskBigInt -band 0xFFFFFFFF # Ensure 32-bit mask
-    $broadcastBigInt = $subnetBigInt -bor $wildcardBigInt
-    $broadcastBytes = [array]::Reverse($broadcastBigInt.ToByteArray())
-    $Broadcast = [System.Net.IPAddress]::new($broadcastBytes[0..3]) # Take the first 4 bytes for IPv4
-    Write-Debug "Calculated Broadcast: $Broadcast"
-} else {
-    Write-Error "Error: IPAddress or Mask is null. Cannot calculate Subnet or Broadcast."
-    return
-}
-
-$IPcount = [math]::Pow(2, 32 - $PrefixLength)
-Write-Debug "Calculated number of IP addresses in Subnet: $IPcount"
+# Calculate Subnet details
 
 # Generate output object
 $Result = [PSCustomObject]@{
