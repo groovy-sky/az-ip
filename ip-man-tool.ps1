@@ -98,8 +98,10 @@ if ($IPAddress -and $PrefixLength) {
 
     # Calculate the broadcast address
     $wildcardBytes = $maskBytes | ForEach-Object { 255 - $_ }
-    $broadcastAddressBytes = $networkAddressBytes -bor $wildcardBytes
-
+    # Perform bitwise OR operation element-wise
+    $broadcastAddressBytes = for ($i = 0; $i -lt $networkAddressBytes.Length; $i++) {
+        $networkAddressBytes[$i] -bor $wildcardBytes[$i]
+    }
     $BroadcastAddress = [IPAddress]([System.Net.IPAddress]::new($broadcastAddressBytes))
 
     # Calculate the total number of usable hosts
