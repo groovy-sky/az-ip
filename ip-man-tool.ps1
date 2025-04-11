@@ -77,12 +77,24 @@ if (($Mask.GetAddressBytes() -join '') -match '0+1') {
     return
 }
 
-# Calculate Subnet details
+# Calculate Subnet details - Alternative Method
 if ($IPAddress -and $Mask) {
-    Write-Verbose "Calculating Subnet and Broadcast for IPAddress: $IPAddress and Mask: $Mask"
-    $Subnet = $IPAddress.Address -band $Mask.Address
+    Write-Verbose "Calculating Subnet and Broadcast using alternative method for IPAddress: $IPAddress and Mask: $Mask"
+    
+    # Convert IP and Mask to BigInteger for precise bitwise operations
+    $ipBytes = [System.Net.IPAddress]::Parse($IPAddress.IPAddressToString).GetAddressBytes()
+    $maskBytes = [System.Net.IPAddress]::Parse($Mask.IPAddressToString).GetAddressBytes()
+    $ipBigInt = [System.Numerics.BigInteger]::new($ipBytes -join '')
+    $maskBigInt = [System.Numerics.BigInteger]::new($maskBytes -join '')
+
+    # Calculate Subnet
+    $subnetBigInt = $ipBigInt -band $maskBigInt
+    $Subnet = [System.Net.IPAddress]::new($subnetBigInt.ToByteArray())
     Write-Debug "Calculated Subnet: $Subnet"
-    $Broadcast = [IPAddress](([byte[]]([IPAddress]$Subnet).GetAddressBytes() | ForEach-Object { $_ }) + ([byte[]]$WildCard.GetAddressBytes() | ForEach-Object { $_ }))
+
+    # Calculate Broadcast
+    $wildcardBigInt = -bnot $maskBigInt -bor $subnetBigInt
+    $Broadcast = [System.Net.IPAddress]::new($wildcardBigInt.ToByteArray())
     Write-Debug "Calculated Broadcast: $Broadcast"
 } else {
     Write-Error "Error: IPAddress or Mask is null. Cannot calculate Subnet or Broadcast."
