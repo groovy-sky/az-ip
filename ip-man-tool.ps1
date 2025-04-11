@@ -70,9 +70,13 @@ if (($Mask.GetAddressBytes() -join '') -match '0+1') {
 }
 
 # Calculate Subnet details
-$Subnet = $IPAddress.Address -band $Mask.Address
-$Broadcast = [IPAddress](([byte[]]([IPAddress]$Subnet).GetAddressBytes() | ForEach-Object { $_ }) + ([byte[]]$WildCard.GetAddressBytes() | ForEach-Object { $_ }))
-$IPcount = [math]::Pow(2, 32 - $PrefixLength)
+if ($IPAddress -and $Mask) {
+    $Subnet = $IPAddress.Address -band $Mask.Address
+    $Broadcast = [IPAddress](([byte[]]([IPAddress]$Subnet).GetAddressBytes() | ForEach-Object { $_ }) + ([byte[]]$WildCard.GetAddressBytes() | ForEach-Object { $_ }))
+} else {
+    Write-Error "Error: IPAddress or Mask is null. Cannot calculate Subnet or Broadcast."
+    return
+}$IPcount = [math]::Pow(2, 32 - $PrefixLength)
 # Generate output object
 $Result = [PSCustomObject]@{
     IPAddress  = $IPAddress.IPAddressToString
