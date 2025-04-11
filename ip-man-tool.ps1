@@ -77,24 +77,33 @@ if (($Mask.GetAddressBytes() -join '') -match '0+1') {
     return
 }
 
-# Calculate Subnet details - Alternative Method
+# Ensure the bytes are in big-endian order
+function ConvertToBigEndian {
+    param ([byte[]]$bytes)
+    return [array]::Reverse($bytes); # Reverses the array for big-endian order
+}
+
+# Calculate Subnet details - Fixed
 if ($IPAddress -and $Mask) {
-    Write-Verbose "Calculating Subnet and Broadcast using alternative method for IPAddress: $IPAddress and Mask: $Mask"
+    Write-Verbose "Calculating Subnet and Broadcast using fixed method for IPAddress: $IPAddress and Mask: $Mask"
     
     # Convert IP and Mask to BigInteger for precise bitwise operations
     $ipBytes = [System.Net.IPAddress]::Parse($IPAddress.IPAddressToString).GetAddressBytes()
     $maskBytes = [System.Net.IPAddress]::Parse($Mask.IPAddressToString).GetAddressBytes()
-    $ipBigInt = [System.Numerics.BigInteger]::new($ipBytes -join '')
-    $maskBigInt = [System.Numerics.BigInteger]::new($maskBytes -join '')
+    $ipBigInt = [System.Numerics.BigInteger]::new([array]::Reverse($ipBytes))
+    $maskBigInt = [System.Numerics.BigInteger]::new([array]::Reverse($maskBytes))
 
     # Calculate Subnet
     $subnetBigInt = $ipBigInt -band $maskBigInt
-    $Subnet = [System.Net.IPAddress]::new($subnetBigInt.ToByteArray())
+    $subnetBytes = [array]::Reverse($subnetBigInt.ToByteArray())
+    $Subnet = [System.Net.IPAddress]::new($subnetBytes[0..3]) # Take the first 4 bytes for IPv4
     Write-Debug "Calculated Subnet: $Subnet"
 
     # Calculate Broadcast
-    $wildcardBigInt = -bnot $maskBigInt -bor $subnetBigInt
-    $Broadcast = [System.Net.IPAddress]::new($wildcardBigInt.ToByteArray())
+    $wildcardBigInt = -bnot $maskBigInt -band 0xFFFFFFFF # Ensure 32-bit mask
+    $broadcastBigInt = $subnetBigInt -bor $wildcardBigInt
+    $broadcastBytes = [array]::Reverse($broadcastBigInt.ToByteArray())
+    $Broadcast = [System.Net.IPAddress]::new($broadcastBytes[0..3]) # Take the first 4 bytes for IPv4
     Write-Debug "Calculated Broadcast: $Broadcast"
 } else {
     Write-Error "Error: IPAddress or Mask is null. Cannot calculate Subnet or Broadcast."
