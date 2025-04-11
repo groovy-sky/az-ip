@@ -117,9 +117,41 @@ if ($IPAddress -and $PrefixLength) {
 }
 
 # Generate output object
+# Generate output object with all expected properties
 $Result = [PSCustomObject]@{
-    IPAddress  = $IPAddress.IPAddressToString
-    Mask       = $Mask.IPAddressToString
-    PrefixLength = $PrefixLength
+    IPAddress       = $IPAddress.IPAddressToString
+    Mask            = $Mask.IPAddressToString
+    PrefixLength    = $PrefixLength
+    NetworkAddress  = $null
+    BroadcastAddress = $null
+    UsableHosts     = $null
 }
-Write-Verbose "Output Result: $Result"
+
+# Populate the subnet details
+if ($IPAddress -and $PrefixLength) {
+    Write-Verbose "Calculating subnet details for IPAddress: $IPAddress and PrefixLength: $PrefixLength"
+
+    # Calculate the network address
+    $networkAddressBytes = for ($i = 0; $i -lt $IPAddress.GetAddressBytes().Length; $i++) {
+        $IPAddress.GetAddressBytes()[$i] -band $Mask.GetAddressBytes()[$i]
+    }
+    $NetworkAddress = [IPAddress]([System.Net.IPAddress]::new($networkAddressBytes))
+
+    # Calculate the broadcast address
+    $wildcardBytes = $Mask.GetAddressBytes() | ForEach-Object { 255 - $_ }
+    $broadcastAddressBytes = for ($i = 0; $i -lt $networkAddressBytes.Length; $i++) {
+        $networkAddressBytes[$i] -bor $wildcardBytes[$i]
+    }
+    $BroadcastAddress = [IPAddress]([System.Net.IPAddress]::new($broadcastAddressBytes))
+
+    # Calculate the total number of usable hosts
+    $usableHosts = [math]::Pow(2, 32 - $PrefixLength) - 2
+
+    # Update the result object
+    $Result.NetworkAddress = $NetworkAddress.IPAddressToString
+    $Result.BroadcastAddress = $BroadcastAddress.IPAddressToString
+    $Result.UsableHosts = $usableHosts
+    Write-Debug "Calculated NetworkAddress: $NetworkAddress, BroadcastAddress: $BroadcastAddress, UsableHosts: $usableHosts"
+} else {
+    Write-Warning "Cannot calculate subnet details. Ensure IPAddress and PrefixLength are provided."
+}
