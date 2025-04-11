@@ -121,3 +121,5 @@ if ($IPAddress -and $PrefixLength) {
 } else {
     Write-Warning "Cannot calculate subnet details. Ensure IPAddress and PrefixLength are provided."
 }
+
+Write-Output $Result
