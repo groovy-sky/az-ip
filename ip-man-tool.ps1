@@ -90,8 +90,10 @@ if ($IPAddress -and $PrefixLength) {
     # Calculate the network address
     $networkAddressBytes = $IPAddress.GetAddressBytes()
     $maskBytes = $Mask.GetAddressBytes()
-    $networkAddressBytes = $networkAddressBytes -band $maskBytes
-
+    # Perform bitwise AND operation element-wise
+    $networkAddressBytes = for ($i = 0; $i -lt $networkAddressBytes.Length; $i++) {
+        $networkAddressBytes[$i] -band $maskBytes[$i]
+    }
     $NetworkAddress = [IPAddress]([System.Net.IPAddress]::new($networkAddressBytes))
 
     # Calculate the broadcast address
