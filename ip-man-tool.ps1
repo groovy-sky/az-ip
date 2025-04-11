@@ -84,6 +84,33 @@ function ConvertToBigEndian {
 }
 
 # Calculate Subnet details
+if ($IPAddress -and $PrefixLength) {
+    Write-Verbose "Calculating subnet details for IPAddress: $IPAddress and PrefixLength: $PrefixLength"
+
+    # Calculate the network address
+    $networkAddressBytes = $IPAddress.GetAddressBytes()
+    $maskBytes = $Mask.GetAddressBytes()
+    $networkAddressBytes = $networkAddressBytes -band $maskBytes
+
+    $NetworkAddress = [IPAddress]([System.Net.IPAddress]::new($networkAddressBytes))
+
+    # Calculate the broadcast address
+    $wildcardBytes = $maskBytes | ForEach-Object { 255 - $_ }
+    $broadcastAddressBytes = $networkAddressBytes -bor $wildcardBytes
+
+    $BroadcastAddress = [IPAddress]([System.Net.IPAddress]::new($broadcastAddressBytes))
+
+    # Calculate the total number of usable hosts
+    $usableHosts = [math]::Pow(2, 32 - $PrefixLength) - 2
+
+    # Update the result object
+    $Result.NetworkAddress = $NetworkAddress.IPAddressToString
+    $Result.BroadcastAddress = $BroadcastAddress.IPAddressToString
+    $Result.UsableHosts = $usableHosts
+    Write-Debug "Calculated NetworkAddress: $NetworkAddress, BroadcastAddress: $BroadcastAddress, UsableHosts: $usableHosts"
+} else {
+    Write-Warning "Cannot calculate subnet details. Ensure IPAddress and PrefixLength are provided."
+}
 
 # Generate output object
 $Result = [PSCustomObject]@{
