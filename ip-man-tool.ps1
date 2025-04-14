@@ -119,41 +119,6 @@ if ($IPAddress -and $PrefixLength) {
     Write-Warning "Cannot calculate subnet details. Ensure IPAddress and PrefixLength are provided."
 }
 
-function Split-Range {
-    param (
-        [Parameter(Mandatory)]
-        [string]$CIDR,
-        [Parameter(Mandatory)]
-        [int]$Subnets
-    )
-    Write-Verbose "Splitting CIDR range $CIDR into $Subnets subnets"
-
-    # Parse the input CIDR
-    $IPAddress, $PrefixLength = $CIDR -split '[|\/]'
-    $IPAddress = [IPAddress]$IPAddress
-    $PrefixLength = [int]$PrefixLength
-
-    # Validate the number of subnets
-    $NewPrefixLength = $PrefixLength + [math]::Log($Subnets, 2)
-    if ($NewPrefixLength -gt 32) {
-        throw "Cannot split CIDR $CIDR into $Subnets subnets as it exceeds the maximum prefix length of 32"
-    }
-
-    # Generate the subnets
-    $subnets = @()
-    for ($i = 0; $i -lt $Subnets; $i++) {
-        # Increment the base address for each subsequent subnet
-        $increment = [math]::Pow(2, (32 - $NewPrefixLength)) * $i
-        $bytes = $IPAddress.GetAddressBytes()
-        [array]::Reverse($bytes)
-        $baseAddress = [System.BitConverter]::ToUInt32($bytes, 0) + $increment
-        $newAddressBytes = [System.BitConverter]::GetBytes($baseAddress)
-        [array]::Reverse($newAddressBytes)
-        $newSubnet = "{0}/{1}" -f ([IPAddress]::new($newAddressBytes)).IPAddressToString, $NewPrefixLength
-        $subnets += $newSubnet
-    }
-
-    return $subnets
-}
+# Function which divides provided IP in CIDR format
 
 Write-Output $Result
