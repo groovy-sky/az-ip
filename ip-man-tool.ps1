@@ -123,25 +123,22 @@ if ($IPAddress -and $PrefixLength) {
 function DivideSubnet {
     param (
         [Parameter(Mandatory)]
-        [string]$CIDR,
-        
-        [Parameter(Mandatory)]
-        [int]$Subnets
+        [string]$CIDR
     )
-    Write-Verbose "Dividing CIDR: $CIDR into $Subnets subnets"
-    
+    Write-Verbose "Dividing CIDR: $CIDR into two smaller subnets"
+
     # Split CIDR into IP and PrefixLength
     $IPAddress, $PrefixLength = $CIDR -split '[|\/]'
     $IPAddress = [IPAddress]$IPAddress
     $PrefixLength = [int]$PrefixLength
 
-    # New PrefixLength for subnets
-    $NewPrefixLength = $PrefixLength + [math]::Log($Subnets, 2)
+    # New PrefixLength for next subnets
+    $NewPrefixLength = $PrefixLength + 1
     if ($NewPrefixLength -gt 32) {
-        throw "Cannot divide into $Subnets subnets. New PrefixLength exceeds 32."
+        throw "Cannot divide the subnet further. New PrefixLength exceeds 32."
     }
 
-    # Calculate the step size for subnets
+    # Step size for each new subnet
     $StepSize = [math]::Pow(2, 32 - $NewPrefixLength)
 
     # Convert IP to integer
@@ -149,9 +146,9 @@ function DivideSubnet {
     [array]::Reverse($IPAddressBytes)
     $IPAddressInt = [BitConverter]::ToUInt32($IPAddressBytes, 0)
 
-    # Generate subnet details
+    # Generate the two subnets
     $SubnetsList = @()
-    for ($i = 0; $i -lt $Subnets; $i++) {
+    for ($i = 0; $i -lt 2; $i++) {
         $SubnetStart = $IPAddressInt + ($i * $StepSize)
         $SubnetBytes = [BitConverter]::GetBytes([uint32]$SubnetStart)
         [array]::Reverse($SubnetBytes) # Convert back to big-endian
