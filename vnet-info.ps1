@@ -1,3 +1,26 @@
+# Retrieve the existing virtual network  
+$vnet = Get-AzResource -ResourceId $vnet_id -ApiVersion $api_ver 
+  
+$new_addr = $vnet.Properties.addressSpace.addressPrefixes + $new_address_space
+$new_addr = $new_addr | Sort-Object | Get-Unique  
 
-$vnet=$(Get-AzResource -ResourceId /subscriptions/f406059a-f933-45e0-aefe-e37e0382d5de/resourceGroups/spoke-vnet/providers/Microsoft.Network/virtualNetworks/spoke-vnet-02 -ApiVersion 2024-05-01)
-$res.Properties.subnets | % {$_.properties.addressPrefixes}
+# Add the new address space to the virtual network if needed
+if ($vnet.Properties.addressSpace.addressPrefixes.Length -ne $new_addr.Length)
+{
+$vnet.Properties.addressSpace.addressPrefixes += $new_address_space
+Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force
+}
+
+# Create a new subnet configuration using the new address space  
+$new_subnet = @{  
+    name = $new_subnet_name  
+    properties = @{  
+        addressPrefix = $new_subnet_prefix  
+    }  
+}  
+  
+# Add the new subnet to the existing subnets  
+$vnet.Properties.subnets += $new_subnet
+  
+# Update the virtual network
+Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force
