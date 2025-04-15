@@ -1,83 +1,118 @@
-function DivideSubnet {  
+
+# Initialize variables  
+$maximum_mask_size = 32  
+$available_ips = @($new_address_space)  
+
+function DivideCIDR {  
     param (  
         [Parameter(Mandatory)]  
-        [string]$CIDR  
+        [string]$CIDR,  
+        [Parameter(Mandatory)]  
+        [int]$TargetPrefixLength  
     )  
-    Write-Verbose "Dividing CIDR: $CIDR into two smaller subnets"  
-      
+  
     # Split CIDR into IP and PrefixLength  
-    $IPAddress, $PrefixLength = $CIDR -split '[|\/]'  
+    $IPAddress, $PrefixLength = $CIDR -split '/'  
     $IPAddress = [IPAddress]$IPAddress  
     $PrefixLength = [int]$PrefixLength  
   
-    # New PrefixLength for next subnets  
-    $NewPrefixLength = $PrefixLength + 1  
-    if ($NewPrefixLength -gt 32) {  
-        throw "Cannot divide the subnet further. New PrefixLength exceeds 32."  
+    # Check if division is needed  
+    if ($PrefixLength -ge $TargetPrefixLength) {  
+        return @($CIDR)  
     }  
   
-    # Step size for each new subnet  
-    $StepSize = [math]::Pow(2, 32 - $NewPrefixLength)  
-  
-    # Convert IP to integer  
-    $IPAddressBytes = $IPAddress.GetAddressBytes()  
-    [array]::Reverse($IPAddressBytes)  
-    $IPAddressInt = [BitConverter]::ToUInt32($IPAddressBytes, 0)  
-  
-    # Generate the two subnets  
-    $SubnetsList = @()  
-    for ($i = 0; $i -lt 2; $i++) {  
-        $SubnetStart = $IPAddressInt + ($i * $StepSize)  
-        $SubnetBytes = [BitConverter]::GetBytes([uint32]$SubnetStart)  
-        [array]::Reverse($SubnetBytes) # Convert back to big-endian  
-        $SubnetIP = [IPAddress]::new($SubnetBytes)  
-  
-        $SubnetCIDR = "$SubnetIP/$NewPrefixLength"  
-        $SubnetsList += $SubnetCIDR  
+    # Prepare for division  
+    $SubnetsList = @($CIDR)  
+    while ($PrefixLength -lt $TargetPrefixLength) {  
+        $NewSubnetsList = @()  
+        foreach ($subnetCIDR in $SubnetsList) {  
+            $SubnetParts = DivideSubnet -CIDR $subnetCIDR  
+            $NewSubnetsList += $SubnetParts  
+        }  
+        $SubnetsList = $NewSubnetsList  
+        $PrefixLength += 1  
     }  
+  
     return $SubnetsList  
 }  
-
+  
+function SplitAvailableIPs {  
+    param (  
+        [array]$available_ips,  
+        [int]$maximum_mask_size  
+    )  
+  
+    # List to store the new divided subnets  
+    $divided_subnets = @()  
+  
+    foreach ($cidr in $available_ips) {  
+        # Divide the CIDR into smaller subnets with the maximum_mask_size  
+        $divided_subnets += DivideCIDR -CIDR $cidr -TargetPrefixLength $maximum_mask_size  
+    }  
+  
+    return $divided_subnets  
+}   
   
 # Retrieve the existing virtual network  
-$vnet = Get-AzResource -ResourceId $vnet_id -ApiVersion $api_ver 
+$vnet = Get-AzResource -ResourceId $vnet_id -ApiVersion $api_ver  
   
-$new_addr = $vnet.Properties.addressSpace.addressPrefixes + $new_address_space
-$new_addr = $new_addr | Sort-Object | Get-Unique  
-
-# Add the new address space to the virtual network if needed
-if ($vnet.Properties.addressSpace.addressPrefixes.Length -ne $new_addr.Length)
-{
-$vnet.Properties.addressSpace.addressPrefixes += $new_address_space
-Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force
-}
-
-# Iteratively divide the address space until reaching the desired prefix length  
-$current_subnets = @($new_address_space)  
-while ($true) {  
-    $next_subnets = @()  
-    foreach ($subnet in $current_subnets) {  
-        $divided = DivideSubnet -CIDR $subnet  
-        $next_subnets += $divided  
-    }  
-    $current_subnets = $next_subnets  
-    if ($current_subnets[0] -match "\/$desired_subnet_prefix$") {  
-        break  
+# Step 1: Gather information about existing subnets  
+$existing_subnets = @{}  
+foreach ($subnet in $vnet.Properties.subnets) {  
+    $subnet_name = $subnet.name  
+    $subnet_prefix = $subnet.properties.addressPrefix  
+      
+    # Check if this subnet is part of the new address space  
+    if (-not ($subnet_prefix -like "$new_address_space*")) {  
+        $existing_subnets[$subnet_name] = $subnet_prefix  
+  
+        # Update maximum_mask_size  
+        $prefix_length = [int]($subnet_prefix -split '/')[1]  
+        if ($prefix_length -lt $maximum_mask_size) {  
+            $maximum_mask_size = $prefix_length  
+        }  
     }  
 }  
   
-# Select one of the divided subnets for the new subnet  
-$new_subnet_prefix = $current_subnets[0] + "" # Choose the first available /24 subnet  
+# Step 2: Sort existing subnets by size (largest first)  
+$sorted_subnets = $existing_subnets.GetEnumerator() | Sort-Object -Property Value
   
-# Create a new subnet configuration using the determined subnet prefix  
-$new_subnet = @{  
-    name = $new_subnet_name
-    properties = @{  
-        addressPrefix = $new_subnet_prefix  
-    }  
+$available_ips = SplitAvailableIPs -available_ips $available_ips -maximum_mask_size $maximum_mask_size    
+  
+# Step 3: Divide available IPs based on maximum_mask_size  
+$new_subnets = @{}  
+foreach ($subnet in $sorted_subnets) {  
+    $subnet_name = "n-" + $subnet.Key  
+    $subnet_prefix = $subnet.Value  
+  
+    # Divide the available IPs  
+    $next_subnet = $available_ips | Select-Object -First 1  
+    $available_ips = $available_ips | Where-Object { $_ -ne $next_subnet }  
+  
+    # Store new subnet's IP and name  
+    $new_subnets[$subnet_name] = $next_subnet  
+
+    # Divide the subnet further if necessary  
+    $divided_subnets = DivideSubnet -CIDR $next_subnet  
+    $available_ips += $divided_subnets  
 }  
   
-# Add the new subnet to the existing subnets  
-$vnet.Properties.subnets += $new_subnet  
-
-Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force
+# Step 4: Apply new subnets to the VNet  
+foreach ($new_subnet in $new_subnets.GetEnumerator()) {  
+    $subnet_name = $new_subnet.Key  
+    $subnet_prefix = $new_subnet.Value  
+  
+    # Create a new subnet configuration  
+    $subnet_config = @{  
+        name = $subnet_name  
+        properties = @{  
+            addressPrefix = $subnet_prefix  
+        }  
+    }  
+  
+    # Add the new subnet to the existing subnets  
+    $vnet.Properties.subnets += $subnet_config  
+}  
+  
+# Update the virtual network with the new subnets  
+Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force  
