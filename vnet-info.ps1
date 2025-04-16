@@ -1,3 +1,4 @@
+
 function DivideCIDR {  
     param (  
         [Parameter(Mandatory)]  
@@ -106,6 +107,48 @@ function Test-IPAddressInRange {
     }  
 }  
 
+# Function to add new subnets to the virtual network properties  
+function AddNewSubnetsToVNetProperties {  
+    param (  
+        [Parameter(Mandatory)]  
+        [hashtable]$new_subnets,  
+        [Parameter(Mandatory)]  
+        [object]$vnet  
+    )  
+      
+    # Initialize a list to store new subnet objects  
+    $new_subnet_objects = @()  
+  
+    # Iterate over each entry in the new subnets  
+    foreach ($subnet in $new_subnets.GetEnumerator()) {  
+        $subnet_name = $subnet.Key  
+        $subnet_prefix = $subnet.Value  
+          
+        # Create a new subnet object  
+        $new_subnet = [PSCustomObject]@{  
+            name       = $subnet_name  
+            id         = "$($vnet.id)/subnets/$subnet_name"  
+            etag       = "" # ETag can be generated or left empty if not relevant  
+            properties = [PSCustomObject]@{  
+                provisioningState                  = "Succeeded"  
+                addressPrefix                      = $subnet_prefix  
+                serviceEndpoints                   = @() # Add specific service endpoints if required  
+                delegations                        = @() # Add specific delegations if needed  
+                privateEndpointNetworkPolicies     = "Disabled"  
+                privateLinkServiceNetworkPolicies  = "Enabled"  
+            }  
+            type       = "Microsoft.Network/virtualNetworks/subnets"  
+        }  
+  
+        # Add the new subnet object to the list  
+        $new_subnet_objects += $new_subnet  
+    }  
+  
+    # Append the new subnet objects to the existing subnets  
+    $vnet.Properties.subnets += $new_subnet_objects  
+  
+    return $vnet  
+}
   
 # Retrieve the existing virtual network  
 Write-Output "[INF]: Retrieving existing virtual network with ID $vnet_id"  
@@ -162,4 +205,8 @@ $existing_subnets.GetEnumerator() | ForEach-Object {
    
 }  
 
+# Add new subnets to VNet 
+$vnet = AddNewSubnetsToVNetProperties -new_subnets $new_subnets -vnet $vnet  
+
+# Apply changes
 Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force
