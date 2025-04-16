@@ -1,4 +1,4 @@
-
+  
 function DivideCIDR {  
     param (  
         [Parameter(Mandatory)]  
@@ -149,6 +149,10 @@ function AddNewSubnetsToVNetProperties {
   
     return $vnet  
 }
+
+function findAvailableIPbyMask{
+	# Takes IP mask and list with IP CIDR. Searches for available IP CIDR. Divides CIDR if no available found (removing original IP) to reach required size. Returns IP CIDR address and IP CIDR list.
+}
   
 # Retrieve the existing virtual network  
 Write-Output "[INF]: Retrieving existing virtual network with ID $vnet_id"  
@@ -190,18 +194,13 @@ foreach ($subnet in $vnet.Properties.subnets) {
 $new_subnets = @{}  
 $existing_subnets.GetEnumerator() | ForEach-Object {  
     $subnet_name = $_.Key  
-    $subnet_prefix = $_.Value  
+    $subnet_prefix = $_.Value
   
     Write-Output "[INF]: Evaluating overlap for subnet $subnet_name with prefix $subnet_prefix"  
   
-    $is_overlapping = $false  
-  
-    foreach ($cidr in $available_ips) {  
-        # Check if the subnet overlaps with the available CIDR range  
-        if ((Test-IPAddressInRange -CIDR1 $subnet_prefix -CIDR2 $cidr) -eq "differ") {  
-            $new_subnets[$new_subnet_prefix+$subnet_name] = $subnet_prefix   
-        }  
-    }  
+    $subnet_name = $new_subnet_prefix+$subnet_name
+    $subnet_prefix, $available_ips = findAvailableIPbyMask -IPs $available_ips -Mask [int]($subnet_prefix -split '/')[1]
+    $new_subnets[$subnet_name] = $subnet_prefix   
    
 }  
 
