@@ -1,4 +1,4 @@
-  
+ 
 function DivideCIDR {  
     param (  
         [Parameter(Mandatory)]  
@@ -150,8 +150,49 @@ function AddNewSubnetsToVNetProperties {
     return $vnet  
 }
 
-function findAvailableIPbyMask{
-	# Takes IP mask and list with IP CIDR. Searches for available IP CIDR. Divides CIDR if no available found (removing original IP) to reach required size. Returns IP CIDR address and IP CIDR list.
+function findAvailableIPbyMask {
+    param (
+        [Parameter(Mandatory)]
+        [array]$IPs, # List of available CIDRs
+        [Parameter(Mandatory)]
+        [int]$Mask   # Required mask size
+    )
+  
+    Write-Output "[INF]: Searching for an available IP CIDR with mask size /$Mask"
+
+    # Initialize variables
+    $resultCIDR = $null
+    $updatedIPs = $IPs
+
+    # Iterate through the IPs to find a suitable CIDR
+    foreach ($cidr in $IPs) {
+        Write-Output "[INF]: Checking CIDR $cidr"
+
+        # Extract the prefix length from the CIDR
+        $prefixLength = [int]($cidr -split '/')[1]
+
+        # If the prefix length matches the required mask, return the CIDR
+        if ($prefixLength -eq $Mask) {
+            Write-Output "[INF]: Found a perfect match: $cidr"
+            $resultCIDR = $cidr
+            $updatedIPs = $IPs -ne $cidr
+            return @($resultCIDR, $updatedIPs)
+        }
+
+        # If the prefix length is smaller (larger block), split the CIDR further
+        if ($prefixLength -lt $Mask) {
+            Write-Output "[INF]: Dividing CIDR $cidr to achieve mask size /$Mask"
+            $dividedSubnets = DivideCIDR -CIDR $cidr -TargetPrefixLength $Mask
+
+            # Take the first subnet and update the IPs list
+            $resultCIDR = $dividedSubnets[0]
+            $updatedIPs = ($IPs -ne $cidr) + $dividedSubnets[1..($dividedSubnets.Count - 1)]
+            return @($resultCIDR, $updatedIPs)
+        }
+    }
+
+    Write-Output "[ERR]: No available IP CIDR found with the required mask size /$Mask"
+    return @($null, $updatedIPs)
 }
   
 # Retrieve the existing virtual network  
