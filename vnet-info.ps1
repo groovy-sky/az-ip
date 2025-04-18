@@ -1,4 +1,4 @@
- 
+  
 function DivideCIDR {  
     param (  
         [Parameter(Mandatory)]  
@@ -6,34 +6,94 @@ function DivideCIDR {
         [Parameter(Mandatory)]  
         [int]$TargetPrefixLength  
     )  
-      
-    Write-Output "[INF]: Dividing CIDR $CIDR into subnets with target prefix length $TargetPrefixLength"  
+  
+    Write-Output "[INF]: Starting division of CIDR $CIDR into subnets with target prefix length $TargetPrefixLength"  
   
     # Split CIDR into IP and PrefixLength  
     $IPAddress, $PrefixLength = $CIDR -split '/'  
+    Write-Output "[DBG]: Initial IP Address: $IPAddress, Initial Prefix Length: $PrefixLength"  
     $IPAddress = [IPAddress]$IPAddress  
     $PrefixLength = [int]$PrefixLength  
   
     # Check if division is needed  
     if ($PrefixLength -ge $TargetPrefixLength) {  
+        Write-Output "[INF]: No division needed, returning original CIDR: $CIDR"  
         return @($CIDR)  
     }  
   
     # Prepare for division  
     $SubnetsList = @($CIDR)  
+    Write-Output "[DBG]: Initial Subnets List: $SubnetsList"  
+  
     while ($PrefixLength -lt $TargetPrefixLength) {  
         $NewSubnetsList = @()  
+        Write-Output "[DBG]: Current Prefix Length: $PrefixLength, Target Prefix Length: $TargetPrefixLength"  
+  
         foreach ($subnetCIDR in $SubnetsList) {  
             Write-Output "[INF]: Dividing subnet $subnetCIDR further"  
-            $SubnetParts = DivideSubnet -CIDR $subnetCIDR  
+              
+            # Assuming DivideCIDR is called recursively here which might be incorrect based on context.  
+            # Ensure the recursive call reflects the intended logic for dividing subnets.  
+            $SubnetParts = DivideCIDR -CIDR $subnetCIDR -TargetPrefixLength ($PrefixLength + 1)  
+  
+            Write-Output "[DBG]: Subnet Parts after division: $SubnetParts"  
             $NewSubnetsList += $SubnetParts  
         }  
+          
         $SubnetsList = $NewSubnetsList  
+        Write-Output "[DBG]: New Subnets List: $SubnetsList"  
         $PrefixLength += 1  
     }  
   
+    Write-Output "[INF]: Final Subnets List: $SubnetsList"  
     return $SubnetsList  
 }  
+
+
+function findAvailableIPbyMask {
+    param (
+        [Parameter(Mandatory)]
+        [array]$IPs, # List of available CIDRs
+        [Parameter(Mandatory)]
+        [int]$Mask   # Required mask size
+    )
+  
+    Write-Output "[INF]: Searching for an available IP CIDR with mask size /$Mask"
+
+    # Initialize variables
+    $resultCIDR = $null
+    $updatedIPs = $IPs
+
+    # Iterate through the IPs to find a suitable CIDR
+    foreach ($cidr in $IPs) {
+        Write-Output "[INF]: Checking CIDR $cidr"
+
+        # Extract the prefix length from the CIDR
+        $prefixLength = [int]($cidr -split '/')[1]
+
+        # If the prefix length matches the required mask, return the CIDR
+        if ($prefixLength -eq $Mask) {
+            Write-Output "[INF]: Found a perfect match: $cidr"
+            $resultCIDR = $cidr
+            $updatedIPs = $IPs -ne $cidr
+            return @($resultCIDR, $updatedIPs)
+        }
+
+        # If the prefix length is smaller (larger block), split the CIDR further
+        if ($prefixLength -lt $Mask) {
+            Write-Output "[INF]: Dividing CIDR $cidr to achieve mask size /$Mask"
+            $dividedSubnets = DivideCIDR -CIDR $cidr -TargetPrefixLength $Mask
+
+            # Take the first subnet and update the IPs list
+            $resultCIDR = $dividedSubnets[0]
+            $updatedIPs = ($IPs -ne $cidr) + $dividedSubnets[1..($dividedSubnets.Count - 1)]
+            return @($resultCIDR, $updatedIPs)
+        }
+    }
+
+    Write-Output "[ERR]: No available IP CIDR found with the required mask size /$Mask"
+    return @($null, $updatedIPs)
+}
   
 function SplitAvailableIPs {  
     param (  
@@ -150,50 +210,6 @@ function AddNewSubnetsToVNetProperties {
     return $vnet  
 }
 
-function findAvailableIPbyMask {
-    param (
-        [Parameter(Mandatory)]
-        [array]$IPs, # List of available CIDRs
-        [Parameter(Mandatory)]
-        [int]$Mask   # Required mask size
-    )
-  
-    Write-Output "[INF]: Searching for an available IP CIDR with mask size /$Mask"
-
-    # Initialize variables
-    $resultCIDR = $null
-    $updatedIPs = $IPs
-
-    # Iterate through the IPs to find a suitable CIDR
-    foreach ($cidr in $IPs) {
-        Write-Output "[INF]: Checking CIDR $cidr"
-
-        # Extract the prefix length from the CIDR
-        $prefixLength = [int]($cidr -split '/')[1]
-
-        # If the prefix length matches the required mask, return the CIDR
-        if ($prefixLength -eq $Mask) {
-            Write-Output "[INF]: Found a perfect match: $cidr"
-            $resultCIDR = $cidr
-            $updatedIPs = $IPs -ne $cidr
-            return @($resultCIDR, $updatedIPs)
-        }
-
-        # If the prefix length is smaller (larger block), split the CIDR further
-        if ($prefixLength -lt $Mask) {
-            Write-Output "[INF]: Dividing CIDR $cidr to achieve mask size /$Mask"
-            $dividedSubnets = DivideCIDR -CIDR $cidr -TargetPrefixLength $Mask
-
-            # Take the first subnet and update the IPs list
-            $resultCIDR = $dividedSubnets[0]
-            $updatedIPs = ($IPs -ne $cidr) + $dividedSubnets[1..($dividedSubnets.Count - 1)]
-            return @($resultCIDR, $updatedIPs)
-        }
-    }
-
-    Write-Output "[ERR]: No available IP CIDR found with the required mask size /$Mask"
-    return @($null, $updatedIPs)
-}
   
 # Retrieve the existing virtual network  
 Write-Output "[INF]: Retrieving existing virtual network with ID $vnet_id"  
@@ -232,18 +248,33 @@ foreach ($subnet in $vnet.Properties.subnets) {
 }  
   
 # Exclude any subnet from $existing_subnets, which IP in CIDR format belongs to $available_ips  
-$new_subnets = @{}  
-$existing_subnets.GetEnumerator() | ForEach-Object {  
-    $subnet_name = $_.Key  
+$new_subnets = @{}
+$existing_subnets.GetEnumerator() | ForEach-Object {
+    $subnet_name = $_.Key
     $subnet_prefix = $_.Value
-  
-    Write-Output "[INF]: Evaluating overlap for subnet $subnet_name with prefix $subnet_prefix"  
-  
-    $subnet_name = $new_subnet_prefix+$subnet_name
-    $subnet_prefix, $available_ips = findAvailableIPbyMask -IPs $available_ips -Mask [int]($subnet_prefix -split '/')[1]
-    $new_subnets[$subnet_name] = $subnet_prefix   
-   
-}  
+
+    Write-Output "[INF]: Evaluating overlap for subnet $subnet_name with prefix $subnet_prefix"
+
+    # Debugging outputs
+    Write-Output "[DEBUG]: \$subnet_prefix = $subnet_prefix"
+    Write-Output "[DEBUG]: \$available_ips = $($available_ips -join ', ')"
+
+    # Validate CIDR split
+    $mask = [int]($subnet_prefix -split '/')[1]
+    Write-Output "[DEBUG]: Mask part = $mask"
+
+    try {
+        $subnet_prefix, $available_ips = findAvailableIPbyMask -IPs $available_ips -Mask $mask
+        Write-Output "[DEBUG]: \$subnet_prefix = $subnet_prefix"
+        Write-Output "[DEBUG]: \$available_ips = $($available_ips -join ', ')"
+    } catch {
+        Write-Output "[ERROR]: Failed during findAvailableIPbyMask execution. Exception: $_"
+        throw
+    }
+
+    $subnet_name = $new_subnet_prefix + $subnet_name
+    $new_subnets[$subnet_name] = $subnet_prefix
+} 
 
 # Add new subnets to VNet 
 $vnet = AddNewSubnetsToVNetProperties -new_subnets $new_subnets -vnet $vnet  
