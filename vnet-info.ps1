@@ -1,118 +1,147 @@
   
-function DivideCIDR {  
+function DivideSubnet {  
+    param (  
+        [Parameter(Mandatory)]  
+        [string]$CIDR  
+    )  
+    Write-Verbose "Dividing CIDR: $CIDR into two smaller subnets"  
+  
+    # Split CIDR into IP and PrefixLength  
+    $IPAddress, $PrefixLength = $CIDR -split '[|\/]'  
+    $IPAddress = [IPAddress]$IPAddress  
+    $PrefixLength = [int]$PrefixLength  
+  
+    # New PrefixLength for next subnets  
+    $NewPrefixLength = $PrefixLength + 1  
+    if ($NewPrefixLength -gt 32) {  
+        throw "Cannot divide the subnet further. New PrefixLength exceeds 32."  
+    }  
+  
+    # Step size for each new subnet  
+    $StepSize = [math]::Pow(2, 32 - $NewPrefixLength)  
+  
+    # Convert IP to integer  
+    $IPAddressBytes = $IPAddress.GetAddressBytes()  
+    [array]::Reverse($IPAddressBytes)  
+    $IPAddressInt = [BitConverter]::ToUInt32($IPAddressBytes, 0)  
+  
+    # Generate the two subnets  
+    $SubnetsList = @()  
+    for ($i = 0; $i -lt 2; $i++) {  
+        $SubnetStart = $IPAddressInt + ($i * $StepSize)  
+        $SubnetBytes = [BitConverter]::GetBytes([uint32]$SubnetStart)  
+        [array]::Reverse($SubnetBytes) # Convert back to big-endian  
+        $SubnetIP = [IPAddress]::new($SubnetBytes)  
+  
+        $SubnetCIDR = "$SubnetIP/$NewPrefixLength"  
+        $SubnetsList += $SubnetCIDR  
+    }  
+    return $SubnetsList  
+}  
+  
+function findAvailableIPbyMask {  
+    param (  
+        [Parameter(Mandatory)]  
+        [array]$IPs, # List of available CIDRs  
+        [Parameter(Mandatory)]  
+        [int]$Mask   # Required mask size  
+    )  
+    # Initialize variables  
+    $resultCIDR = $null  
+    $updatedIPs = @()  
+  
+    # Iterate through the IPs to find a suitable CIDR  
+    foreach ($cidr in $IPs) {  
+        # Extract the prefix length from the CIDR  
+        $prefixLength = [int]($cidr -split '/')[1]  
+          
+        # If the prefix length matches the required mask, return the CIDR  
+        if ($prefixLength -eq $Mask) {  
+            $resultCIDR = $cidr  
+            $updatedIPs = $IPs | Where-Object {$_ -ne $cidr}  
+            return @($resultCIDR, $updatedIPs)  
+        }  
+          
+        # If the prefix length is smaller (larger block), split the CIDR further  
+        if ($prefixLength -lt $Mask) {  
+            $dividedSubnets = DivideSubnetMultipleTimes -CIDR $cidr -DesiredMaskSize $Mask  
+            # Take the first subnet and update the IPs list  
+            $resultCIDR = $dividedSubnets[0]  
+            $dividedSubnets = $dividedSubnets | Where-Object {$_ -ne $resultCIDR}  
+            $updatedIPs += $dividedSubnets  
+            $updatedIPs = $updatedIPs | Where-Object {$_ -ne $cidr}  
+            return @($resultCIDR, $updatedIPs)  
+        }  
+    }  
+    return @($null, $updatedIPs)  
+}  
+  
+function DivideSubnetMultipleTimes {  
     param (  
         [Parameter(Mandatory)]  
         [string]$CIDR,  
         [Parameter(Mandatory)]  
-        [int]$TargetPrefixLength  
+        [int]$DesiredMaskSize  
     )  
-  
-    Write-Output "[INF]: Starting division of CIDR $CIDR into subnets with target prefix length $TargetPrefixLength"  
+    Write-Verbose "Dividing CIDR: $CIDR to reach the desired mask size: $DesiredMaskSize"  
   
     # Split CIDR into IP and PrefixLength  
-    $IPAddress, $PrefixLength = $CIDR -split '/'  
-    Write-Output "[DBG]: Initial IP Address: $IPAddress, Initial Prefix Length: $PrefixLength"  
+    $IPAddress, $PrefixLength = $CIDR -split '[|\/]'  
     $IPAddress = [IPAddress]$IPAddress  
     $PrefixLength = [int]$PrefixLength  
   
-    # Check if division is needed  
-    if ($PrefixLength -ge $TargetPrefixLength) {  
-        Write-Output "[INF]: No division needed, returning original CIDR: $CIDR"  
-        return @($CIDR)  
+    # Validate the desired mask size  
+    if ($DesiredMaskSize -le $PrefixLength) {  
+        throw "Desired mask size must be greater than the current prefix length."  
     }  
   
-    # Prepare for division  
-    $SubnetsList = @($CIDR)  
-    Write-Output "[DBG]: Initial Subnets List: $SubnetsList"  
+    if ($DesiredMaskSize -gt 32) {  
+        throw "Desired mask size exceeds 32."  
+    }  
   
-    while ($PrefixLength -lt $TargetPrefixLength) {  
-        $NewSubnetsList = @()  
-        Write-Output "[DBG]: Current Prefix Length: $PrefixLength, Target Prefix Length: $TargetPrefixLength"  
+    # Initialize the current subnet list with the initial CIDR  
+    $CurrentSubnets = @($CIDR)  
   
-        foreach ($subnetCIDR in $SubnetsList) {  
-            Write-Output "[INF]: Dividing subnet $subnetCIDR further"  
-              
-            # Assuming DivideCIDR is called recursively here which might be incorrect based on context.  
-            # Ensure the recursive call reflects the intended logic for dividing subnets.  
-            $SubnetParts = DivideCIDR -CIDR $subnetCIDR -TargetPrefixLength ($PrefixLength + 1)  
+    # Divide subnets until the desired mask size is reached  
+    while ($PrefixLength -lt $DesiredMaskSize) {  
+        $NewSubnets = @()  
+        foreach ($SubnetCIDR in $CurrentSubnets) {  
+            $SubnetIP, $SubnetPrefixLength = $SubnetCIDR -split '[|\/]'  
+            $SubnetIP = [IPAddress]$SubnetIP  
+            $SubnetPrefixLength = [int]$SubnetPrefixLength  
   
-            Write-Output "[DBG]: Subnet Parts after division: $SubnetParts"  
-            $NewSubnetsList += $SubnetParts  
+            $NewPrefixLength = $SubnetPrefixLength + 1  
+            if ($NewPrefixLength -gt $DesiredMaskSize) {  
+                break  
+            }  
+  
+            # Step size for each new subnet  
+            $StepSize = [math]::Pow(2, 32 - $NewPrefixLength)  
+  
+            # Convert IP to integer  
+            $SubnetBytes = $SubnetIP.GetAddressBytes()  
+            [array]::Reverse($SubnetBytes)  
+            $SubnetInt = [BitConverter]::ToUInt32($SubnetBytes, 0)  
+  
+            # Generate the two subnets  
+            for ($i = 0; $i -lt 2; $i++) {  
+                $SubnetStart = $SubnetInt + ($i * $StepSize)  
+                $SubnetBytes = [BitConverter]::GetBytes([uint32]$SubnetStart)  
+                [array]::Reverse($SubnetBytes) # Convert back to big-endian  
+                $SubnetIP = [IPAddress]::new($SubnetBytes)  
+  
+                $NewSubnetCIDR = "$SubnetIP/$NewPrefixLength"  
+                $NewSubnets += $NewSubnetCIDR  
+            }  
         }  
-          
-        $SubnetsList = $NewSubnetsList  
-        Write-Output "[DBG]: New Subnets List: $SubnetsList"  
-        $PrefixLength += 1  
+  
+        # Update the current subnets list  
+        $CurrentSubnets = $NewSubnets  
+        $PrefixLength = $NewPrefixLength  
     }  
   
-    Write-Output "[INF]: Final Subnets List: $SubnetsList"  
-    return $SubnetsList  
-}  
-
-
-function findAvailableIPbyMask {
-    param (
-        [Parameter(Mandatory)]
-        [array]$IPs, # List of available CIDRs
-        [Parameter(Mandatory)]
-        [int]$Mask   # Required mask size
-    )
-  
-    Write-Output "[INF]: Searching for an available IP CIDR with mask size /$Mask"
-
-    # Initialize variables
-    $resultCIDR = $null
-    $updatedIPs = $IPs
-
-    # Iterate through the IPs to find a suitable CIDR
-    foreach ($cidr in $IPs) {
-        Write-Output "[INF]: Checking CIDR $cidr"
-
-        # Extract the prefix length from the CIDR
-        $prefixLength = [int]($cidr -split '/')[1]
-
-        # If the prefix length matches the required mask, return the CIDR
-        if ($prefixLength -eq $Mask) {
-            Write-Output "[INF]: Found a perfect match: $cidr"
-            $resultCIDR = $cidr
-            $updatedIPs = $IPs -ne $cidr
-            return @($resultCIDR, $updatedIPs)
-        }
-
-        # If the prefix length is smaller (larger block), split the CIDR further
-        if ($prefixLength -lt $Mask) {
-            Write-Output "[INF]: Dividing CIDR $cidr to achieve mask size /$Mask"
-            $dividedSubnets = DivideCIDR -CIDR $cidr -TargetPrefixLength $Mask
-
-            # Take the first subnet and update the IPs list
-            $resultCIDR = $dividedSubnets[0]
-            $updatedIPs = ($IPs -ne $cidr) + $dividedSubnets[1..($dividedSubnets.Count - 1)]
-            return @($resultCIDR, $updatedIPs)
-        }
-    }
-
-    Write-Output "[ERR]: No available IP CIDR found with the required mask size /$Mask"
-    return @($null, $updatedIPs)
-}
-  
-function SplitAvailableIPs {  
-    param (  
-        [array]$available_ips,  
-        [int]$maximum_mask_size  
-    )  
-  
-    Write-Output "[INF]: Splitting available IPs into subnets with maximum mask size $maximum_mask_size"  
-  
-    # List to store the new divided subnets  
-    $divided_subnets = @()  
-  
-    foreach ($cidr in $available_ips) {  
-        Write-Output "[INF]: Splitting CIDR $cidr"  
-        # Divide the CIDR into smaller subnets with the maximum_mask_size  
-        $divided_subnets += DivideCIDR -CIDR $cidr -TargetPrefixLength $maximum_mask_size  
-    }  
-  
-    return $divided_subnets  
+    # Return the final subnets  
+    return $CurrentSubnets  
 }  
   
 function Test-IPAddressInRange {  
