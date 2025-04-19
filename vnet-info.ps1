@@ -76,73 +76,70 @@ function findAvailableIPbyMask {
     return @($null, $updatedIPs)  
 }  
   
-function DivideSubnetMultipleTimes {  
-    param (  
-        [Parameter(Mandatory)]  
-        [string]$CIDR,  
-        [Parameter(Mandatory)]  
-        [int]$DesiredMaskSize  
-    )  
-    Write-Verbose "Dividing CIDR: $CIDR to reach the desired mask size: $DesiredMaskSize"  
-  
-    # Split CIDR into IP and PrefixLength  
-    $IPAddress, $PrefixLength = $CIDR -split '[|\/]'  
-    $IPAddress = [IPAddress]$IPAddress  
-    $PrefixLength = [int]$PrefixLength  
-  
-    # Validate the desired mask size  
-    if ($DesiredMaskSize -le $PrefixLength) {  
-        throw "Desired mask size must be greater than the current prefix length."  
-    }  
-  
-    if ($DesiredMaskSize -gt 32) {  
-        throw "Desired mask size exceeds 32."  
-    }  
-  
-    # Initialize the current subnet list with the initial CIDR  
-    $CurrentSubnets = @($CIDR)  
-  
-    # Divide subnets until the desired mask size is reached  
-    while ($PrefixLength -lt $DesiredMaskSize) {  
-        $NewSubnets = @()  
-        foreach ($SubnetCIDR in $CurrentSubnets) {  
-            $SubnetIP, $SubnetPrefixLength = $SubnetCIDR -split '[|\/]'  
-            $SubnetIP = [IPAddress]$SubnetIP  
-            $SubnetPrefixLength = [int]$SubnetPrefixLength  
-  
-            $NewPrefixLength = $SubnetPrefixLength + 1  
-            if ($NewPrefixLength -gt $DesiredMaskSize) {  
-                break  
-            }  
-  
-            # Step size for each new subnet  
-            $StepSize = [math]::Pow(2, 32 - $NewPrefixLength)  
-  
-            # Convert IP to integer  
-            $SubnetBytes = $SubnetIP.GetAddressBytes()  
-            [array]::Reverse($SubnetBytes)  
-            $SubnetInt = [BitConverter]::ToUInt32($SubnetBytes, 0)  
-  
-            # Generate the two subnets  
-            for ($i = 0; $i -lt 2; $i++) {  
-                $SubnetStart = $SubnetInt + ($i * $StepSize)  
-                $SubnetBytes = [BitConverter]::GetBytes([uint32]$SubnetStart)  
-                [array]::Reverse($SubnetBytes) # Convert back to big-endian  
-                $SubnetIP = [IPAddress]::new($SubnetBytes)  
-  
-                $NewSubnetCIDR = "$SubnetIP/$NewPrefixLength"  
-                $NewSubnets += $NewSubnetCIDR  
-            }  
-        }  
-  
-        # Update the current subnets list  
-        $CurrentSubnets = $NewSubnets  
-        $PrefixLength = $NewPrefixLength  
-    }  
-  
-    # Return the final subnets  
-    return $CurrentSubnets  
-}  
+function DivideSubnetMultipleTimes {
+    param (
+        [Parameter(Mandatory)]
+        [string]$CIDR,
+        [Parameter(Mandatory)]
+        [int]$DesiredMaskSize
+    )
+    Write-Verbose "Dividing CIDR: $CIDR to reach the desired mask size: $DesiredMaskSize"
+
+    # Split CIDR into IP and PrefixLength
+    $IPAddress, $PrefixLength = $CIDR -split '[|\/]'
+    $IPAddress = [IPAddress]$IPAddress
+    $PrefixLength = [int]$PrefixLength
+
+    # Validate the desired mask size
+    if ($DesiredMaskSize -le $PrefixLength) {
+        throw "Desired mask size must be greater than the current prefix length."
+    }
+
+    if ($DesiredMaskSize -gt 32) {
+        throw "Desired mask size exceeds 32."
+    }
+
+    # Initialize the current subnet list with the initial CIDR as a dynamic ArrayList
+    $SubnetsList = [System.Collections.ArrayList]@($CIDR)
+
+    # Iterate over the subnets and divide only when necessary
+    $i = 0
+    while ($i -lt $SubnetsList.Count) {
+        $CurrentSubnet = $SubnetsList[$i]
+        $SubnetIP, $SubnetPrefixLength = $CurrentSubnet -split '[|\/]'
+        $SubnetPrefixLength = [int]$SubnetPrefixLength
+
+        # If the current subnet's prefix length is smaller than the desired mask size, divide it
+        if ($SubnetPrefixLength -lt $DesiredMaskSize) {
+            $StepSize = [math]::Pow(2, 32 - ($SubnetPrefixLength + 1))
+
+            # Convert the IP to an integer
+            $SubnetBytes = ([IPAddress]$SubnetIP).GetAddressBytes()
+            [array]::Reverse($SubnetBytes)
+            $SubnetInt = [BitConverter]::ToUInt32($SubnetBytes, 0)
+
+            # Generate two subnets
+            $NewSubnets = @()
+            for ($j = 0; $j -lt 2; $j++) {
+                $NewSubnetStart = $SubnetInt + ($j * $StepSize)
+                $NewSubnetBytes = [BitConverter]::GetBytes([uint32]$NewSubnetStart)
+                [array]::Reverse($NewSubnetBytes) # Convert back to big-endian
+                $NewSubnetIP = [IPAddress]::new($NewSubnetBytes)
+                $NewSubnets += "$NewSubnetIP/$($SubnetPrefixLength + 1)"
+            }
+
+            # Replace the current subnet with the two new subnets
+            $SubnetsList[$i] = $NewSubnets[0]
+            $SubnetsList.Insert($i + 1, $NewSubnets[1])
+        }
+
+        # Move to the next subnet
+        $i++
+    }
+
+    # Return the final list of subnets
+    return $SubnetsList
+}
   
 function Test-IPAddressInRange {  
     [CmdletBinding()]  
