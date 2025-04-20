@@ -66,7 +66,7 @@ function findAvailableIPbyMask {
         if ($prefixLength -lt $Mask) {  
             $dividedSubnets = DivideSubnetMultipleTimes -CIDR $cidr -DesiredMaskSize $Mask  
             # Take the first subnet and update the IPs list  
-            $resultCIDR = $dividedSubnets[0]  
+            $resultCIDR = $dividedSubnets[-1]  
             $dividedSubnets = $dividedSubnets | Where-Object {$_ -ne $resultCIDR}  
             $updatedIPs += $dividedSubnets  
             $updatedIPs = $updatedIPs | Where-Object {$_ -ne $cidr}  
