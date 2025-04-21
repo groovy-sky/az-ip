@@ -1,3 +1,23 @@
+<#  
+.SYNOPSIS  
+Updates the address space and subnets of an Azure Virtual Network.  
+  
+.DESCRIPTION  
+This function modifies the address space and subnets of a specified Azure Virtual Network.  
+It adds new address space if required and processes existing subnets to update them with new prefixes.  
+  
+.PARAMETER vnet_id  
+The ID of the Azure Virtual Network to update.  
+  
+.PARAMETER new_address_space  
+The new address space to be added to the virtual network.  
+  
+.PARAMETER new_subnet_prefix  
+(Optional) The prefix for new subnets to be added.  
+  
+.EXAMPLE  
+Update-VNetAddressSpaceAndSubnets -vnet_id "your-vnet-id" -new_address_space "10.0.0.0/16"  
+#>  
 function Update-VNetAddressSpaceAndSubnets {
 [CmdletBinding()]	
     param (
