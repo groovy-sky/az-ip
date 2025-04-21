@@ -16,9 +16,9 @@ The new address space to be added to the virtual network.
 (Optional) The prefix for new subnets to be added.  
   
 .EXAMPLE  
-Update-VNetAddressSpaceAndSubnets -vnet_id "your-vnet-id" -new_address_space "10.0.0.0/16"  
+Copy-AzSubnets -vnet_id "your-vnet-id" -new_address_space "10.0.0.0/16"  
 #>  
-function Update-VNetAddressSpaceAndSubnets {
+function Copy-AzSubnets {
 [CmdletBinding()]	
     param (
         [Parameter(Mandatory = $true)][string]$vnet_id,  # Virtual Network ID
