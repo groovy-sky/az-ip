@@ -32,6 +32,7 @@
 #>
 
 <#  
+
 .SYNOPSIS  
 Clone subnets sizes of an Azure Virtual Network.  
   
@@ -49,6 +50,7 @@ The new address space to be added to the virtual network.
   
 .EXAMPLE  
 Copy-AzSubnets -vnet_id "your-vnet-id" -new_address_space "10.0.0.0/16"  
+
 #>  
 
 function Copy-AzSubnets {
