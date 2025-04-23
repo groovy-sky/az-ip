@@ -3,7 +3,7 @@
 
 .VERSION 1.0.0
 
-.GUID a73e567c-39b1-45d6-9ec8-6ff561d5356d
+.GUID 0ce538a5-e9c7-44e6-acac-13f306290b38
 
 .AUTHOR groovy-sky
 
@@ -11,7 +11,7 @@
 
 .COPYRIGHT groovy-sky
 
-.TAGS Azure VNet Subnet
+.TAGS
 
 .LICENSEURI
 
@@ -32,27 +32,14 @@
 
 #>
 
-<#  
+<# 
 
-.SYNOPSIS  
-Clone subnets sizes of an Azure Virtual Network.  
-  
-.DESCRIPTION  
-This script allows to clone existing subnets for Azure Virtual Network. It requires a new address space using which it creates duplicates of subnets by size and name (with prefix 'n-'). 
+.DESCRIPTION 
+ This script allows to clone existing subnets for Azure Virtual Network. It requires a new address space using which it creates duplicates of subnets by size and name (with prefix 'n-').  
 
-.PARAMETER vnet_id  
-The ID of the Azure Virtual Network to update.  
-  
-.PARAMETER new_address_space  
-The new address space to be added to the virtual network.  
-  
-.PARAMETER new_subnet_prefix  
-(Optional) The prefix for new subnets to be added.  
-  
-.EXAMPLE  
-Copy-AzSubnets -vnet_id "your-vnet-id" -new_address_space "10.0.0.0/16"  
+#> 
 
-#>  
+
 
 function Copy-AzSubnets {
 [CmdletBinding()]	
