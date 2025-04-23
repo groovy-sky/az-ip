@@ -30,7 +30,6 @@
 
 #>
 
-
 <#  
 .SYNOPSIS  
 Clone subnets sizes of an Azure Virtual Network.  
@@ -38,7 +37,6 @@ Clone subnets sizes of an Azure Virtual Network.
 .DESCRIPTION  
 This script allows to clone existing subnets for Azure Virtual Network. It requires a new address space using which it creates duplicates of subnets by size and name (with prefix 'n-'). 
 
-  
 .PARAMETER vnet_id  
 The ID of the Azure Virtual Network to update.  
   
