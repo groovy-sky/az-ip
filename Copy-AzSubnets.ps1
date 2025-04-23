@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.0
+.VERSION 1.0.0
 
 .GUID a73e567c-39b1-45d6-9ec8-6ff561d5356d
 
@@ -26,6 +26,7 @@
 
 .RELEASENOTES
 
+
 .PRIVATEDATA
 
 #>
@@ -49,6 +50,7 @@ The new address space to be added to the virtual network.
 .EXAMPLE  
 Copy-AzSubnets -vnet_id "your-vnet-id" -new_address_space "10.0.0.0/16"  
 #>  
+
 function Copy-AzSubnets {
 [CmdletBinding()]	
     param (
