@@ -40,8 +40,6 @@
 #> 
 
 
-
-function Copy-AzSubnets {
 [CmdletBinding()]	
     param (
         [Parameter(Mandatory = $true)][string]$vnet_id,  # Virtual Network ID
@@ -119,7 +117,6 @@ function Copy-AzSubnets {
     # Apply changes
     Write-Output "[INFO]: Applying changes to the virtual network"
     Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force
-}
 
 # Divides provided IP CIDR
 function DivideSubnet {  
