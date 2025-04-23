@@ -1,10 +1,43 @@
+<#PSScriptInfo
+
+.VERSION 1.0
+
+.GUID a73e567c-39b1-45d6-9ec8-6ff561d5356d
+
+.AUTHOR groovy-sky
+
+.COMPANYNAME groovy-sky
+
+.COPYRIGHT groovy-sky
+
+.TAGS Azure VNet Subnet
+
+.LICENSEURI
+
+.PROJECTURI
+
+.ICONURI
+
+.EXTERNALMODULEDEPENDENCIES Az.Resources
+
+.REQUIREDSCRIPTS
+
+.EXTERNALSCRIPTDEPENDENCIES
+
+.RELEASENOTES
+
+.PRIVATEDATA
+
+#>
+
+
 <#  
 .SYNOPSIS  
-Updates the address space and subnets of an Azure Virtual Network.  
+Clone subnets sizes of an Azure Virtual Network.  
   
 .DESCRIPTION  
-This function modifies the address space and subnets of a specified Azure Virtual Network.  
-It adds new address space if required and processes existing subnets to update them with new prefixes.  
+This script allows to clone existing subnets for Azure Virtual Network. It requires a new address space using which it creates duplicates of subnets by size and name (with prefix 'n-'). 
+
   
 .PARAMETER vnet_id  
 The ID of the Azure Virtual Network to update.  
