@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.0.5
+.VERSION 1.0.6
 
 .GUID 0ce538a5-e9c7-44e6-acac-13f306290b38
 
@@ -300,8 +300,8 @@ $current_prefixes = $vnet.Properties.addressSpace.addressPrefixes
 $new_prefixes = $current_prefixes + $new_address_space | Sort-Object | Get-Unique
 
 if ($current_prefixes.Length -ne $new_prefixes.Length) {
-    Write-Output "[INFO]: Adding new address space to the virtual network"
     $vnet.Properties.addressSpace.addressPrefixes = $new_prefixes
+    Write-Output "[INFO]: Adding new address space to the virtual network $vnet.Properties.addressSpace.addressPrefixes"
     Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force
 }
 
