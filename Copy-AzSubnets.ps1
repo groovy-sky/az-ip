@@ -313,7 +313,7 @@ $maximum_mask_size = 32  # Initialize to the maximum possible mask size
 
 foreach ($subnet in $vnet.Properties.subnets) {
     $subnet_name = $subnet.name
-    $subnet_prefix = $subnet.properties.addressPrefix
+    $subnet_prefix = $subnet.properties.addressPrefixes
     Write-Output "[INFO]: Checking if $subnet_prefix is part of $new_address_space"
 
     if ((Test-IPAddressInRange -CIDR1 $new_address_space -CIDR2 $subnet_prefix) -eq "differ") {
