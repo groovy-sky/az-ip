@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.0.8
+.VERSION 1.0.9
 
 .GUID 0ce538a5-e9c7-44e6-acac-13f306290b38
 
