@@ -316,7 +316,7 @@ foreach ($subnet in $vnet.Properties.subnets) {
     if ($subnet.properties.addressPrefixes) {  
         $subnet_prefix = $subnet.properties.addressPrefixes[0]  
     } elseif ($subnet.properties.addressPrefix) {  
-        $subnet_prefix = $subnet.properties.addressPrefix
+        $subnet_prefix = $subnet.properties.addressPrefix  
     }
     Write-Output "[INFO]: Checking if $subnet_prefix is part of $new_address_space"
 
