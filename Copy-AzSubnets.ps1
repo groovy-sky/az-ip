@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.0.9
+.VERSION 1.1.0
 
 .GUID 0ce538a5-e9c7-44e6-acac-13f306290b38
 
@@ -313,7 +313,7 @@ $maximum_mask_size = 32  # Initialize to the maximum possible mask size
 
 foreach ($subnet in $vnet.Properties.subnets) {
     $subnet_name = $subnet.name
-    $subnet_prefix = $subnet.properties.addressPrefixes
+    $subnet_prefix = $subnet.properties.addressPrefixes[0]
     Write-Output "[INFO]: Checking if $subnet_prefix is part of $new_address_space"
 
     if ((Test-IPAddressInRange -CIDR1 $new_address_space -CIDR2 $subnet_prefix) -eq "differ") {
