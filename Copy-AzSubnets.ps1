@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.1.2
+.VERSION 1.1.3
 
 .GUID 0ce538a5-e9c7-44e6-acac-13f306290b38
 
@@ -17,7 +17,7 @@
 
 .PROJECTURI
 
-.ICONURI
+.ICONURI https://raw.githubusercontent.com/groovy-sky/az-ip/refs/heads/main/logo.png
 
 .EXTERNALMODULEDEPENDENCIES Az.Resources
 
