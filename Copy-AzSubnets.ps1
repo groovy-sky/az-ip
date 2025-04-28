@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.0.6
+.VERSION 1.0.7
 
 .GUID 0ce538a5-e9c7-44e6-acac-13f306290b38
 
@@ -286,7 +286,7 @@ function AddNewSubnetsToVNetProperties {
   
     return $vnet  
 }
-$api_ver="2022-07-01"
+$api_ver="2024-07-01"
 $available_ips = @($new_address_space)  
 if ($new_subnet_prefix.Length -eq 0) {
 $new_subnet_prefix = "n-"
@@ -301,7 +301,7 @@ $new_prefixes = $current_prefixes + $new_address_space | Sort-Object | Get-Uniqu
 
 if ($current_prefixes.Length -ne $new_prefixes.Length) {
     $vnet.Properties.addressSpace.addressPrefixes = $new_prefixes
-    Write-Output "[INFO]: Adding new address space to the virtual network $vnet.Properties.addressSpace.addressPrefixes"
+    Write-Output ("[INFO]: Adding new address space to the virtual network " + $vnet.Properties.addressSpace.addressPrefixes)
     Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force
 }
 
