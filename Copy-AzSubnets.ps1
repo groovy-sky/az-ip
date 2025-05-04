@@ -362,7 +362,7 @@ $new_subnets = @{}
 # Sort the existing_subnets hashtable by prefix length
 $sorted_existing_subnets = $existing_subnets.GetEnumerator() | Sort-Object {
     # Extract and sort by the prefix length from the subnet prefix
-    $prefixLength = ($_).Value -split '/')[1]
+    $prefixLength = ($_.Value -split '/')[1]
     [int]$prefixLength
 }
 
