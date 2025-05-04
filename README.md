@@ -27,3 +27,9 @@ Install-Script -Name Copy-AzSubnets -Force
 ```powershell
 Copy-AzSubnets.ps1 -vnet_id "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Network/virtualNetworks/<vnet-name>" -new_address_space "<cidr-ip>"
 ```
+
+```powershell
+Copy-AzSubnets.ps1 -vnet_id "<vnet-id>" -new_address_space "192.168.242.0/24"
+```
+
+![](subnet_copy_example.png)
