@@ -15,7 +15,7 @@
 
 .LICENSEURI
 
-.PROJECTURI
+.PROJECTURI https://github.com/groovy-sky/az-ip
 
 .ICONURI https://raw.githubusercontent.com/groovy-sky/az-ip/refs/heads/main/logo.png
 
@@ -286,6 +286,26 @@ function AddNewSubnetsToVNetProperties {
   
     return $vnet  
 }
+
+function Sort-IPRanges {
+    param (
+        [Parameter(Mandatory)]
+        [array]$IPs # Array of CIDRs (e.g., "10.0.0.0/24", "10.0.0.0/16")
+    )
+
+    # Sort the IPs by prefix length in ascending order (smaller prefix = larger range)
+    $sortedRanges = $IPs | Sort-Object {
+        # Extract the prefix length from the CIDR
+        $cidrPrefix = ($_ -split '/')[1]
+        [int]$cidrPrefix
+    }
+
+    # Reverse the order to prioritize the largest ranges first
+    $sortedRanges = $sortedRanges[-1..0]
+
+    return $sortedRanges
+}
+
 $api_ver="2024-07-01"
 $available_ips = @($new_address_space)  
 if ($new_subnet_prefix.Length -eq 0) {
