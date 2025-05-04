@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.1.3
+.VERSION 1.1.4
 
 .GUID 0ce538a5-e9c7-44e6-acac-13f306290b38
 
@@ -359,7 +359,15 @@ foreach ($subnet in $vnet.Properties.subnets) {
 # Generate new subnets
 Write-Output "[INFO]: Generating new subnets"
 $new_subnets = @{}
-foreach ($entry in $existing_subnets.GetEnumerator()) {
+# Sort the existing_subnets hashtable by prefix length
+$sorted_existing_subnets = $existing_subnets.GetEnumerator() | Sort-Object {
+    # Extract and sort by the prefix length from the subnet prefix
+    $prefixLength = ($_).Value -split '/')[1]
+    [int]$prefixLength
+}
+
+# Process the sorted subnets
+foreach ($entry in $sorted_existing_subnets) {
     $subnet_name = $entry.Key
     $subnet_prefix = $entry.Value
 
@@ -373,7 +381,6 @@ foreach ($entry in $existing_subnets.GetEnumerator()) {
         }
     }
 }
-
 # Add new subnets to the virtual network
 Write-Output "[INFO]: Adding new subnets to the virtual network"
 $vnet = AddNewSubnetsToVNetProperties -new_subnets $new_subnets -vnet $vnet
