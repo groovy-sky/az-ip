@@ -1,7 +1,15 @@
+# Copy-AzSubnets
 
-## About `Copy-AzSubnets.ps1`
+## Introduction
 
-The `Copy-AzSubnets.ps1` script allows you to clone existing subnets within an Azure Virtual Network (VNet). It uses a new address space provided by the user, creates duplicates of subnets based on their size and name, and adds a customizable prefix (`n-` by default) to the new subnet names.
+![](logo.png)
+
+This script allows you to clone existing subnets within an Azure Virtual Network (VNet). It uses a new address space provided by the user, creates duplicates of subnets based on their size and name, and adds a customizable prefix (`n-` by default) to the new subnet names.
+
+## Installation
+```
+Install-Script -Name Copy-AzSubnets -Force
+```
 
 ### Features
 - **Clone Subnets**: Duplicates existing subnets within a new address space.
@@ -24,11 +32,4 @@ The `Copy-AzSubnets.ps1` script allows you to clone existing subnets within an A
 ### Example Usage
 ```powershell
 Copy-AzSubnets.ps1 -vnet_id "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Network/virtualNetworks/<vnet-name>" -new_address_space "10.1.0.0/16" -new_subnet_prefix "new-"
-
-Install 
-```
-Install-Script -Name Copy-AzSubnets -Force
-```
-```
-Copy-AzSubnets.ps1 -vnet_id "" -new_address_space ""
 ```
