@@ -10,12 +10,18 @@ This script is designed to automate the cloning of subnets within an Azure Virtu
 
 This tool is ideal for scenarios where you need to scale your Azure infrastructure quickly and maintain consistency across your networking configurations. Instead of manually configuring new subnets, the script does the work for you by replicating existing subnet structures, adding new address spaces, and updating VNet properties automatically. 
 
-## Installation
+## How-to use
 
-To install the script, run the following command:
+1. Install the script:
 
 ```powershell
 Install-Script -Name Copy-AzSubnets -Force
+```
+
+2. Apply the changes:
+
+```powershell
+Copy-AzSubnets.ps1 -vnet_id "<vnet-id>" -new_address_space "<new-ip>"
 ```
 
 ### Input Parameters
@@ -24,12 +30,19 @@ Install-Script -Name Copy-AzSubnets -Force
 - **`new_subnet_prefix`** (Optional): The prefix for new subnet names (default is `n-`).
 
 ### Example
-```powershell
-Copy-AzSubnets.ps1 -vnet_id "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Network/virtualNetworks/<vnet-name>" -new_address_space "<cidr-ip>"
-```
 
-```powershell
-Copy-AzSubnets.ps1 -vnet_id "<vnet-id>" -new_address_space "192.168.242.0/24"
-```
+Let's say, there is a following VNet:
 
-![](subnet_copy_example.png)
+![](before.png)
+
+To run the script you'll need to get VNet ID (VNet -> Settings -> Properties):
+
+![](spoke_vnet_id.png)
+
+After VNet ID is known and new IP address has been chosen, you can install and run the script:
+
+![](result.png)
+
+As a result subnet structure will be copied (blue color - original IPs, green - copied):
+
+![](after.png)
