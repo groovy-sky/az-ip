@@ -21,11 +21,11 @@ Install-Script -Name Copy-AzSubnets -Force
 2. Apply the changes:
 
 ```powershell
-Copy-AzSubnets.ps1 -vnet_id "<vnet-id>" -new_address_space "<new-ip>"
+Copy-AzSubnets.ps1 -vnet_id "<vnet-resource-id>" -new_address_space "<new-ip>"
 ```
 
 ### Input Parameters
-- **`vnet_id`**(Required): The ID of the Azure Virtual Network.
+- **`vnet_id`**(Required): The Resource ID of the Azure Virtual Network.
 - **`new_address_space`**(Required): The new IP address space to be used for subnet creation.
 - **`new_subnet_prefix`** (Optional): The prefix for new subnet names (default is `n-`).
 
