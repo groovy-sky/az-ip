@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.1.4
+.VERSION 1.1.5
 
 .GUID 0ce538a5-e9c7-44e6-acac-13f306290b38
 
@@ -26,7 +26,7 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
-
+Fixed null reference error in findAvailableIPbyMask function
 
 .PRIVATEDATA
 
@@ -183,12 +183,15 @@ function findAvailableIPbyMask {
             # Take the first subnet and update the IPs list  
             $resultCIDR = $dividedSubnets[-1]  
             $dividedSubnets = $dividedSubnets | Where-Object {$_ -ne $resultCIDR}  
+            # First, get all IPs except the current one being divided
+            $updatedIPs = $IPs | Where-Object {$_ -ne $cidr}
+            # Then add the divided subnets
             $updatedIPs += $dividedSubnets  
-            $updatedIPs = $updatedIPs | Where-Object {$_ -ne $cidr}  
             return @($resultCIDR, $updatedIPs)  
         }  
     }  
-    return @($null, $updatedIPs)  
+    # If no suitable CIDR found, return null for resultCIDR but preserve the IPs list
+    return @($null, $IPs)  
 }  
 
 # Check if one IP is a part of another
@@ -201,7 +204,7 @@ function Test-IPAddressInRange {
         [string]$CIDR2  
     )  
   
-    Write-Output "[INF]: Testing if CIDR $CIDR1 overlaps with CIDR $CIDR2"  
+    Write-Verbose "Testing if CIDR $CIDR1 overlaps with CIDR $CIDR2"  
   
     # Helper function to convert IP address to uint32  
     function ConvertTo-UInt32 {  
@@ -373,7 +376,16 @@ foreach ($entry in $sorted_existing_subnets) {
 
     if (-not ($skipped_subnets -contains $subnet_name)) {
         try {
-            $subnet_prefix, $available_ips = findAvailableIPbyMask -IPs $available_ips -Mask ([int]($subnet_prefix -split '/')[1])
+            $result = findAvailableIPbyMask -IPs $available_ips -Mask ([int]($subnet_prefix -split '/')[1])
+            $subnet_prefix = $result[0]
+            $available_ips = $result[1]
+            
+            # Check if we successfully allocated a subnet
+            if ($null -eq $subnet_prefix) {
+                Write-Output "[ERROR]: Unable to allocate IP space for subnet $subnet_name with mask /$(($entry.Value -split '/')[1]). No available space in the provided address range."
+                throw "Insufficient address space to allocate all subnets."
+            }
+            
             $new_subnets[$new_subnet_prefix + $subnet_name] = $subnet_prefix
         } catch {
             Write-Output "[ERROR]: Failed to allocate new IP for subnet $subnet_name. Exception: $_"
