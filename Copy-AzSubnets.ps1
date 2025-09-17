@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.1.8
+.VERSION 1.2.1
 
 .GUID 0ce538a5-e9c7-44e6-acac-13f306290b38
 
@@ -25,7 +25,10 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
-Version 1.1.8 - Fixed array handling in findAvailableIPbyMask function to prevent InvalidRequestFormat errors
+Version 1.2.1 - Fixed subnet object structure to match Azure Network API 2024-01-01 schema
+Version 1.2.0 - Fixed subnet object structure and error handling
+Version 1.1.9 - Fixed subnet object structure to match Azure API requirements
+Version 1.1.8 - Fixed array handling in findAvailableIPbyMask function
 Version 1.1.7 - Updated IP allocation logic
 Version 1.1.6 - Fixed null reference error in findAvailableIPbyMask function
 Version 1.1.5 - Initial release with subnet copying functionality
@@ -180,14 +183,16 @@ function findAvailableIPbyMask {
         # If the prefix length is smaller (larger block), split the CIDR further  
         if ($prefixLength -lt $Mask) {  
             $dividedSubnets = DivideSubnetMultipleTimes -CIDR $cidr -DesiredMaskSize $Mask  
-            # Take the first subnet and update the IPs list  
+            # Take the last subnet and update the IPs list  
             $resultCIDR = $dividedSubnets[-1]  
-            $dividedSubnets = @($dividedSubnets | Where-Object {$_ -ne $resultCIDR})  
             
-            # Fixed: Create a new array with all IPs except the current one, then add divided subnets
+            # Remove the selected subnet from the divided subnets
+            $remainingDividedSubnets = @($dividedSubnets | Where-Object {$_ -ne $resultCIDR})  
+            
+            # Create updated IPs list: all IPs except the current one, plus the remaining divided subnets
             $updatedIPs = @($IPs | Where-Object {$_ -ne $cidr})
-            if ($dividedSubnets.Count -gt 0) {
-                $updatedIPs += $dividedSubnets  
+            if ($remainingDividedSubnets.Count -gt 0) {
+                $updatedIPs += $remainingDividedSubnets  
             }
             
             return @($resultCIDR, $updatedIPs)  
@@ -250,47 +255,46 @@ function Test-IPAddressInRange {
     }  
 }  
 
-# Function to add new subnets to the virtual network properties  
-function AddNewSubnetsToVNetProperties {  
+# Function to add new subnets to the virtual network  
+function AddNewSubnetsToVNet {  
     param (  
         [Parameter(Mandatory)]  
         [hashtable]$new_subnets,  
         [Parameter(Mandatory)]  
-        [object]$vnet  
+        [string]$vnet_id,
+        [Parameter(Mandatory)]  
+        [string]$api_version
     )  
-      
-    # Initialize a list to store new subnet objects  
-    $new_subnet_objects = @()  
-  
-    # Iterate over each entry in the new subnets  
+    
     foreach ($subnet in $new_subnets.GetEnumerator()) {  
         $subnet_name = $subnet.Key  
         $subnet_prefix = $subnet.Value  
-          
-        # Create a new subnet object  
-        $new_subnet = [PSCustomObject]@{  
-            name       = $subnet_name  
-            id         = "$($vnet.id)/subnets/$subnet_name"  
-            etag       = "" # ETag can be generated or left empty if not relevant  
-            properties = [PSCustomObject]@{  
-                provisioningState                  = "Succeeded"  
-                addressPrefix                      = $subnet_prefix  
-                serviceEndpoints                   = @() # Add specific service endpoints if required  
-                delegations                        = @() # Add specific delegations if needed  
-                privateEndpointNetworkPolicies     = "Disabled"  
-                privateLinkServiceNetworkPolicies  = "Enabled"  
-            }  
-            type       = "Microsoft.Network/virtualNetworks/subnets"  
-        }  
-  
-        # Add the new subnet object to the list  
-        $new_subnet_objects += $new_subnet  
-    }  
-  
-    # Append the new subnet objects to the existing subnets  
-    $vnet.Properties.subnets += $new_subnet_objects  
-  
-    return $vnet  
+        
+        Write-Output "[INFO]: Creating subnet $subnet_name with address prefix $subnet_prefix"
+        
+        # Create the subnet using Az cmdlet which handles the proper formatting
+        try {
+            # Parse the VNet ID to get resource group and VNet name
+            $vnet_parts = $vnet_id -split '/'
+            $resourceGroupName = $vnet_parts[4]
+            $vnetName = $vnet_parts[8]
+            
+            # Use Az Network cmdlet to add subnet
+            $subnetConfig = New-AzVirtualNetworkSubnetConfig `
+                -Name $subnet_name `
+                -AddressPrefix $subnet_prefix `
+                -PrivateEndpointNetworkPoliciesFlag "Disabled" `
+                -PrivateLinkServiceNetworkPoliciesFlag "Enabled"
+            
+            $vnet = Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName
+            $vnet.Subnets.Add($subnetConfig)
+            Set-AzVirtualNetwork -VirtualNetwork $vnet | Out-Null
+            
+            Write-Output "[INFO]: Successfully created subnet $subnet_name"
+        } catch {
+            Write-Error "Failed to create subnet $subnet_name: $_"
+        }
+    }
 }
 
 function Sort-IPRanges {
@@ -312,23 +316,42 @@ function Sort-IPRanges {
     return $sortedRanges
 }
 
-$api_ver="2024-07-01"
+$api_ver = "2024-01-01"
 $available_ips = @($new_address_space)  
 if ($new_subnet_prefix.Length -eq 0) {
     $new_subnet_prefix = "n-"
 }
-# Retrieve the existing virtual network
-Write-Output "[INFO]: Retrieving existing virtual network with ID $vnet_id"
-$vnet = Get-AzResource -ResourceId $vnet_id -ApiVersion $api_ver
+
+# Parse the VNet ID to get resource group and VNet name
+$vnet_parts = $vnet_id -split '/'
+$resourceGroupName = $vnet_parts[4]
+$vnetName = $vnet_parts[8]
+
+# Retrieve the existing virtual network using Az cmdlet
+Write-Output "[INFO]: Retrieving existing virtual network $vnetName in resource group $resourceGroupName"
+try {
+    $vnet = Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName
+} catch {
+    Write-Error "Failed to retrieve virtual network: $_"
+    exit 1
+}
 
 # Add the new address space to the virtual network if needed
-$current_prefixes = $vnet.Properties.addressSpace.addressPrefixes
+$current_prefixes = $vnet.AddressSpace.AddressPrefixes
 $new_prefixes = $current_prefixes + $new_address_space | Sort-Object | Get-Unique
 
-if ($current_prefixes.Length -ne $new_prefixes.Length) {
-    $vnet.Properties.addressSpace.addressPrefixes += $new_address_space
-    Write-Output ("[INFO]: Adding new address space to the virtual network " + $vnet.Properties.addressSpace.addressPrefixes)
-    Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force
+if ($current_prefixes.Count -ne $new_prefixes.Count) {
+    Write-Output "[INFO]: Adding new address space to the virtual network: $new_address_space"
+    $vnet.AddressSpace.AddressPrefixes = $new_prefixes
+    
+    try {
+        Set-AzVirtualNetwork -VirtualNetwork $vnet | Out-Null
+        # Re-retrieve the vnet to get the updated state
+        $vnet = Get-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name $vnetName
+    } catch {
+        Write-Error "Failed to add new address space: $_"
+        exit 1
+    }
 }
 
 # Process subnets
@@ -337,13 +360,22 @@ $existing_subnets = @{}
 $skipped_subnets = @()
 $maximum_mask_size = 32  # Initialize to the maximum possible mask size
 
-foreach ($subnet in $vnet.Properties.subnets) {
-    $subnet_name = $subnet.name
-    if ($subnet.properties.addressPrefixes) {  
-        $subnet_prefix = $subnet.properties.addressPrefixes[0]  
-    } elseif ($subnet.properties.addressPrefix) {  
-        $subnet_prefix = $subnet.properties.addressPrefix  
+foreach ($subnet in $vnet.Subnets) {
+    $subnet_name = $subnet.Name
+    $subnet_prefix = $null
+    
+    # Handle both AddressPrefix and AddressPrefixes
+    if ($subnet.AddressPrefixes -and $subnet.AddressPrefixes.Count -gt 0) {  
+        $subnet_prefix = $subnet.AddressPrefixes[0]  
+    } elseif ($subnet.AddressPrefix) {  
+        $subnet_prefix = $subnet.AddressPrefix  
     }
+    
+    if ($null -eq $subnet_prefix) {
+        Write-Warning "Subnet $subnet_name has no address prefix, skipping"
+        continue
+    }
+    
     Write-Output "[INFO]: Checking if $subnet_prefix is part of $new_address_space"
 
     if ((Test-IPAddressInRange -CIDR1 $new_address_space -CIDR2 $subnet_prefix) -eq "differ") {
@@ -354,7 +386,7 @@ foreach ($subnet in $vnet.Properties.subnets) {
         }
     } else {
         # Store subnet to $skipped_subnets to check if a new IP have not been already allocated
-        if ($subnet_name.Length -gt $new_subnet_prefix.Length) {
+        if ($subnet_name.StartsWith($new_subnet_prefix)) {
             $skipped_subnets += $subnet_name.Substring($new_subnet_prefix.Length)
         } else {
             $skipped_subnets += $subnet_name
@@ -365,9 +397,9 @@ foreach ($subnet in $vnet.Properties.subnets) {
 # Generate new subnets
 Write-Output "[INFO]: Generating new subnets"
 $new_subnets = @{}
-# Sort the existing_subnets hashtable by prefix length
+
+# Sort the existing_subnets hashtable by prefix length (smaller subnets first)
 $sorted_existing_subnets = $existing_subnets.GetEnumerator() | Sort-Object {
-    # Extract and sort by the prefix length from the subnet prefix
     $prefixLength = ($_.Value -split '/')[1]
     [int]$prefixLength
 }
@@ -379,28 +411,64 @@ foreach ($entry in $sorted_existing_subnets) {
 
     if (-not ($skipped_subnets -contains $subnet_name)) {
         try {
-            $result = findAvailableIPbyMask -IPs $available_ips -Mask ([int]($subnet_prefix -split '/')[1])
-            $subnet_prefix = $result[0]
+            $mask = [int]($subnet_prefix -split '/')[1]
+            Write-Verbose "Allocating subnet for $subnet_name with mask /$mask"
+            
+            $result = findAvailableIPbyMask -IPs $available_ips -Mask $mask
+            $allocated_subnet = $result[0]
             $available_ips = $result[1]
             
             # Check if we successfully allocated a subnet
-            if ($null -eq $subnet_prefix) {
-                Write-Output "[ERROR]: Unable to allocate IP space for subnet $subnet_name with mask /$(($entry.Value -split '/')[1]). No available space in the provided address range."
-                throw "Insufficient address space to allocate all subnets."
+            if ($null -eq $allocated_subnet) {
+                Write-Error "Unable to allocate IP space for subnet $subnet_name with mask /$mask. No available space in the provided address range."
+                continue
             }
             
-            $new_subnets[$new_subnet_prefix + $subnet_name] = $subnet_prefix
+            $new_subnet_name = $new_subnet_prefix + $subnet_name
+            $new_subnets[$new_subnet_name] = $allocated_subnet
+            Write-Output "[INFO]: Allocated $allocated_subnet for new subnet $new_subnet_name"
+            
         } catch {
-            Write-Output "[ERROR]: Failed to allocate new IP for subnet $subnet_name. Exception: $_"
-            throw
+            Write-Error "Failed to allocate new IP for subnet $subnet_name. Exception: $_"
+            continue
         }
+    } else {
+        Write-Output "[INFO]: Skipping subnet $subnet_name as it already exists in the new address space"
     }
 }
 
+if ($new_subnets.Count -eq 0) {
+    Write-Output "[INFO]: No new subnets to add"
+    exit 0
+}
+
 # Add new subnets to the virtual network
-Write-Output "[INFO]: Adding new subnets to the virtual network"
-$vnet = AddNewSubnetsToVNetProperties -new_subnets $new_subnets -vnet $vnet
+Write-Output "[INFO]: Adding $($new_subnets.Count) new subnets to the virtual network"
+
+# Create subnet configurations
+$subnetConfigs = @()
+foreach ($subnet in $new_subnets.GetEnumerator()) {
+    $subnetConfig = New-AzVirtualNetworkSubnetConfig `
+        -Name $subnet.Key `
+        -AddressPrefix $subnet.Value `
+        -PrivateEndpointNetworkPoliciesFlag "Disabled" `
+        -PrivateLinkServiceNetworkPoliciesFlag "Enabled"
+    
+    $subnetConfigs += $subnetConfig
+}
+
+# Add all new subnet configurations to the VNet
+foreach ($config in $subnetConfigs) {
+    $vnet.Subnets.Add($config)
+}
 
 # Apply changes
 Write-Output "[INFO]: Applying changes to the virtual network"
-Set-AzResource -ResourceId $vnet_id -ApiVersion $api_ver -Properties $vnet.Properties -Force
+try {
+    Set-AzVirtualNetwork -VirtualNetwork $vnet | Out-Null
+    Write-Output "[SUCCESS]: Virtual network updated successfully with $($new_subnets.Count) new subnets"
+} catch {
+    Write-Error "Failed to update virtual network: $_"
+    Write-Error "Error details: $($_.Exception.Message)"
+    exit 1
+}
