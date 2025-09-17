@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 1.1.7
+.VERSION 1.1.8
 
 .GUID 0ce538a5-e9c7-44e6-acac-13f306290b38
 
@@ -25,6 +25,8 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+Version 1.1.8 - Fixed array handling in findAvailableIPbyMask function to prevent InvalidRequestFormat errors
+Version 1.1.7 - Updated IP allocation logic
 Version 1.1.6 - Fixed null reference error in findAvailableIPbyMask function
 Version 1.1.5 - Initial release with subnet copying functionality
 
@@ -171,7 +173,7 @@ function findAvailableIPbyMask {
         # If the prefix length matches the required mask, return the CIDR  
         if ($prefixLength -eq $Mask) {  
             $resultCIDR = $cidr  
-            $updatedIPs = $IPs | Where-Object {$_ -ne $cidr}  
+            $updatedIPs = @($IPs | Where-Object {$_ -ne $cidr})  
             return @($resultCIDR, $updatedIPs)  
         }  
           
@@ -180,11 +182,14 @@ function findAvailableIPbyMask {
             $dividedSubnets = DivideSubnetMultipleTimes -CIDR $cidr -DesiredMaskSize $Mask  
             # Take the first subnet and update the IPs list  
             $resultCIDR = $dividedSubnets[-1]  
-            $dividedSubnets = $dividedSubnets | Where-Object {$_ -ne $resultCIDR}  
-            # First, get all IPs except the current one being divided
-            $updatedIPs = $IPs | Where-Object {$_ -ne $cidr}
-            # Then add the divided subnets
-            $updatedIPs += $dividedSubnets  
+            $dividedSubnets = @($dividedSubnets | Where-Object {$_ -ne $resultCIDR})  
+            
+            # Fixed: Create a new array with all IPs except the current one, then add divided subnets
+            $updatedIPs = @($IPs | Where-Object {$_ -ne $cidr})
+            if ($dividedSubnets.Count -gt 0) {
+                $updatedIPs += $dividedSubnets  
+            }
+            
             return @($resultCIDR, $updatedIPs)  
         }  
     }  
@@ -310,7 +315,7 @@ function Sort-IPRanges {
 $api_ver="2024-07-01"
 $available_ips = @($new_address_space)  
 if ($new_subnet_prefix.Length -eq 0) {
-$new_subnet_prefix = "n-"
+    $new_subnet_prefix = "n-"
 }
 # Retrieve the existing virtual network
 Write-Output "[INFO]: Retrieving existing virtual network with ID $vnet_id"
@@ -347,13 +352,13 @@ foreach ($subnet in $vnet.Properties.subnets) {
         if ($prefix_length -lt $maximum_mask_size) {
             $maximum_mask_size = $prefix_length
         }
-    } else{
-        # Store subnet to $skipped_subnets to check if a new IP have not been already allocated
-        if ($subnet_name.Length -gt $new_subnet_prefix.Length){
-                $skipped_subnets += $subnet_name.Substring($new_subnet_prefix.Length)
     } else {
-        $skipped_subnets += $subnet_name
-    }
+        # Store subnet to $skipped_subnets to check if a new IP have not been already allocated
+        if ($subnet_name.Length -gt $new_subnet_prefix.Length) {
+            $skipped_subnets += $subnet_name.Substring($new_subnet_prefix.Length)
+        } else {
+            $skipped_subnets += $subnet_name
+        }
     }  
 }
 
@@ -391,6 +396,7 @@ foreach ($entry in $sorted_existing_subnets) {
         }
     }
 }
+
 # Add new subnets to the virtual network
 Write-Output "[INFO]: Adding new subnets to the virtual network"
 $vnet = AddNewSubnetsToVNetProperties -new_subnets $new_subnets -vnet $vnet
